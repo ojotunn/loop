@@ -97,7 +97,7 @@ export class Engine {
       const buys = await a.buysBetween(loop.curve, from, latest);
       const whale = parseEther(String(this.rules.whaleEth));
       for (const b of buys) {
-        if (String(b.recipient).toLowerCase() === this.agent.toLowerCase()) continue;
+        if (String(b.recipient).toLowerCase() === String(this.agent || '').toLowerCase()) continue;
         loop.buys += 1;
         loop.lastBuyAt = iso(this.now());
         loop.othersEth = eth(parseEther(loop.othersEth || '0') + b.quoteIn);
@@ -190,7 +190,7 @@ export class Engine {
     const a = this.adapter;
     let fees = 0n;
     try {
-      if (!cs.graduated && !cs.buybackEnabled && String(cs.deployer).toLowerCase() === this.agent.toLowerCase() && cs.unswept > 0n) {
+      if (!cs.graduated && !cs.buybackEnabled && String(cs.deployer).toLowerCase() === String(this.agent || '').toLowerCase() && cs.unswept > 0n) {
         const r = await a.sweep({ curve: loop.curve });
         txs.push({ label: 'sweep', hash: r.hash, ok: r.ok });
       }
