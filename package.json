@@ -1,0 +1,17 @@
+{
+  "name": "loop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Loop: a token that is born, dies and is born again from its own creator fees, on pons (Robinhood Chain).",
+  "engines": { "node": ">=22.9" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "test": "node --env-file-if-exists=.env.test --test test/"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "express": "^5.2.1",
+    "viem": "^2.56.3"
+  }
+}

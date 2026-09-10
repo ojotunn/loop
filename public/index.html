@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loop — a token that is born, dies, and is born again</title>
+<meta name="description" content="Loop launches $LOOP on pons, dies, collects its own creator fees and launches again with everything it earned. The last loop buys the whole curve and burns it.">
+<meta property="og:title" content="Loop">
+<meta property="og:description" content="A token that is born, dies, and is born again from its own fees. Until it buys the whole curve and burns it.">
+<meta property="og:image" content="/brand/og.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/brand/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="/">
+    <svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="19" pathLength="100" stroke-dasharray="80 20" transform="rotate(-60 32 32)"/><path class="head" d="M23.8 13.9 L21.1 22.9 L14.5 15.5 Z"/></svg>
+    <span>Loop</span>
+  </a>
+  <nav class="links">
+    <a id="link-pons" href="#" target="_blank" rel="noopener" hidden>Trade on pons</a>
+    <a id="link-x" href="#" target="_blank" rel="noopener" hidden>X</a>
+    <a id="link-tg" href="#" target="_blank" rel="noopener" hidden>Telegram</a>
+    <a href="#how">How it works</a>
+  </nav>
+</header>
+
+<main>
+
+<section class="hero">
+  <div class="loop-mark" id="loop-mark" aria-hidden="true">
+    <svg viewBox="0 0 200 200"><circle class="track" cx="100" cy="100" r="82"/><circle class="arc" cx="100" cy="100" r="82" pathLength="100"/><path class="arrow" d="M150 20 L178 36 L156 60"/></svg>
+    <div class="mark-n"><span class="mark-label">loop</span><span id="mark-n">—</span></div>
+  </div>
+  <div class="hero-text">
+    <h1>A token that is born, <em>dies</em>, and is born again.</h1>
+    <p class="lead">Every loop launches <b>$<span class="sym">LOOP</span></b> on pons and buys itself with everything the last loop earned. When it dies, the agent sells its position back, collects the creator fees and starts over, bigger. The last loop buys the <em>whole curve</em> and burns it.</p>
+  </div>
+</section>
+
+<section class="live card" id="live">
+  <div class="row head">
+    <div>
+      <div class="eyebrow">Now</div>
+      <h2 id="live-title">Loop —</h2>
+    </div>
+    <span class="pill" id="pill">loading</span>
+  </div>
+  <p class="status-text" id="status-text">Reading the chain…</p>
+  <div class="stats" id="live-stats">
+    <div class="stat"><div class="k">Market cap</div><div class="v num" id="s-mcap">—</div><div class="sub" id="s-mcap-eth"></div></div>
+    <div class="stat"><div class="k">Peak</div><div class="v num" id="s-peak">—</div><div class="sub" id="s-peak-at"></div></div>
+    <div class="stat"><div class="k">Buys</div><div class="v num" id="s-buys">—</div><div class="sub" id="s-biggest"></div></div>
+    <div class="stat"><div class="k">Fees waiting</div><div class="v num" id="s-fees">—</div><div class="sub">creator tax <span id="s-tax">—</span></div></div>
+    <div class="stat"><div class="k">Alive for</div><div class="v num" id="s-age">—</div><div class="sub" id="s-born"></div></div>
+    <div class="stat"><div class="k">To graduation</div><div class="v num" id="s-grad">—</div><div class="sub" id="s-raised"></div></div>
+  </div>
+  <div class="ca" id="ca-row" hidden>
+    <span class="k">Contract</span>
+    <code id="ca" class="num"></code>
+    <button class="btn small" id="copy-ca" type="button">Copy</button>
+    <a class="btn small primary" id="ca-pons" href="#" target="_blank" rel="noopener">Open on pons</a>
+  </div>
+  <p class="rule" id="death-rule"></p>
+</section>
+
+<section class="pot card">
+  <div class="row head">
+    <div>
+      <div class="eyebrow">The pot</div>
+      <h2>Road to the final burn</h2>
+    </div>
+    <span class="num big" id="pot-pct">—</span>
+  </div>
+  <div class="bar"><div class="fill" id="pot-fill"></div></div>
+  <div class="pot-legend">
+    <span>Pot <b class="num" id="pot-eth">—</b></span>
+    <span>Whole curve <b class="num" id="curve-cost">—</b></span>
+  </div>
+  <p class="muted">The pot is the agent's balance minus a small gas reserve. Every death adds the fees it collected and the ETH it sold back. When the pot covers the whole bonding curve, the agent stops and asks its creator to authorize the last loop: one launch, one buy of the entire curve, and everything it receives goes to the dead address.</p>
+  <div class="final-box" id="final-box" hidden></div>
+</section>
+
+<section class="history card">
+  <div class="row head">
+    <div>
+      <div class="eyebrow">History</div>
+      <h2>Every loop so far</h2>
+    </div>
+    <span class="muted" id="hist-summary"></span>
+  </div>
+  <ol class="timeline" id="timeline"><li class="muted">No loop yet.</li></ol>
+</section>
+
+<section class="feed card">
+  <div class="row head">
+    <div>
+      <div class="eyebrow">Voice</div>
+      <h2>What the agent said</h2>
+    </div>
+  </div>
+  <ul class="posts" id="posts"><li class="muted">Nothing yet.</li></ul>
+</section>
+
+<section class="how card" id="how">
+  <div class="eyebrow">How it works</div>
+  <h2>Five rules, no exceptions</h2>
+  <ol class="rules">
+    <li><b>Birth.</b> The agent launches <span class="sym-text">$LOOP</span> on pons v2 (Robinhood Chain) and buys itself in the same transaction with the whole pot. Same name, same ticker, every time.</li>
+    <li><b>Life.</b> People trade. The creator tax (<span id="how-tax">10%</span>) accrues to the agent's own wallet. It watches buys, peak and graduation.</li>
+    <li><b>Death.</b> A loop dies when <span id="how-idle">6</span> hours pass without a buy and the market cap sits below <span id="how-floor">20%</span> of its peak, when it turns <span id="how-life">48</span> hours old, or when the creator presses the button. If it graduates instead, the position stays in the pool and only the fees move on.</li>
+    <li><b>Rebirth.</b> The agent sells its position back to the curve, sweeps and claims the fees, rests <span id="how-rest">15</span> minutes, and launches the next loop with all of it.</li>
+    <li><b>The end.</b> When the pot covers the whole curve, the agent asks its creator for authorization. With it, the last loop is born, the whole curve is bought at birth, and every token is burned. There is no loop after that.</li>
+  </ol>
+  <div class="agent-box">
+    <div class="k">Agent wallet</div>
+    <code class="num" id="agent-addr">—</code>
+    <a class="btn small" id="agent-explorer" href="#" target="_blank" rel="noopener">Explorer</a>
+    <p class="muted">By construction this wallet can only launch on pons, sell to its own curve, sweep and claim creator fees, and transfer to the dead address. It cannot send ETH anywhere else.</p>
+  </div>
+</section>
+
+<section class="admin card" id="admin" hidden>
+  <div class="row head">
+    <div>
+      <div class="eyebrow">Creator</div>
+      <h2>Internal controls</h2>
+    </div>
+    <button class="btn small" id="admin-logout" type="button" hidden>Forget token</button>
+  </div>
+  <div id="admin-login">
+    <p class="muted">Paste the admin token to unlock the buttons. It stays in this browser only.</p>
+    <div class="row">
+      <input id="admin-token" type="password" placeholder="admin token" autocomplete="off">
+      <button class="btn primary" id="admin-enter" type="button">Unlock</button>
+    </div>
+    <p class="err" id="admin-err"></p>
+  </div>
+  <div id="admin-panel" hidden>
+    <div class="admin-grid">
+      <button class="btn danger" id="btn-kill" type="button">Sell & launch the next</button>
+      <button class="btn" id="btn-launch" type="button">Launch now (skip rest)</button>
+      <button class="btn" id="btn-pause" type="button">Pause</button>
+      <button class="btn" id="btn-resume" type="button">Resume</button>
+      <button class="btn" id="btn-tick" type="button">Run a cycle now</button>
+      <button class="btn burn" id="btn-authorize" type="button" hidden>Authorize the final burn</button>
+    </div>
+    <p class="muted" id="admin-msg"></p>
+    <details class="log"><summary>Engine log</summary><ul id="log"></ul></details>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div>Loop runs on <a href="https://www.ponsfamily.com" target="_blank" rel="noopener">pons v2</a> · Robinhood Chain</div>
+  <div class="muted">Nothing here is financial advice. Every loop can and will die. <a href="#admin" id="admin-link">creator</a></div>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
