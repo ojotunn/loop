@@ -24,6 +24,56 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   let state = null;
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Numeros que contam: de onde estavam ate o valor novo, em ~0,9 s.
+  const shown = new Map();
+  function setNum(id, value, format) {
+    const el = $(id);
+    if (value == null || !isFinite(value)) { el.textContent = '—'; shown.delete(id); return; }
+    const from = shown.has(id) ? shown.get(id) : 0;
+    shown.set(id, value);
+    if (reduced || from === value) { el.textContent = format(value); return; }
+    const t0 = performance.now(), dur = 900;
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = format(from + (value - from) * e);
+      if (k < 1 && shown.get(id) === value) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // Cartoes surgem ao rolar.
+  const io = 'IntersectionObserver' in window && !reduced ? new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }, { threshold: 0.08 }) : null;
+  document.querySelectorAll('.card').forEach((c) => { if (io) { c.classList.add('reveal'); io.observe(c); } });
+  // Rede de seguranca: se o observador nao disparar, tudo aparece mesmo assim.
+  setTimeout(() => document.querySelectorAll('.reveal').forEach((c) => c.classList.add('in')), 1800);
+
+  // Brasas subindo no fundo: poucas, lentas, atras de tudo.
+  (function embers() {
+    const cv = $('embers');
+    if (!cv || reduced) return;
+    const ctx = cv.getContext('2d');
+    let W = 0, H = 0, ps = [], raf = 0;
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const spawn = (fresh) => ({ x: rnd(0, W), y: fresh ? rnd(0, H) : H + 10, r: rnd(0.8, 2.6), v: rnd(0.15, 0.55), sway: rnd(0.4, 1.4), ph: rnd(0, 6.28), a: rnd(0.25, 0.8), life: rnd(0.6, 1) });
+    const resize = () => { W = cv.width = innerWidth; H = cv.height = innerHeight; const n = Math.min(70, Math.round(W / 18)); ps = Array.from({ length: n }, () => spawn(true)); };
+    const draw = (t) => {
+      ctx.clearRect(0, 0, W, H);
+      for (const p of ps) {
+        p.y -= p.v; p.x += Math.sin(t / 1400 + p.ph) * p.sway * 0.15;
+        const fade = Math.min(1, (H - p.y) / (H * 0.25)) * Math.min(1, p.y / (H * 0.35));
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.28);
+        ctx.fillStyle = `rgba(255, ${Math.round(90 + 90 * (1 - p.life))}, 31, ${(p.a * fade).toFixed(3)})`;
+        ctx.fill();
+        if (p.y < -10) Object.assign(p, spawn(false));
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) cancelAnimationFrame(raf); else raf = requestAnimationFrame(draw); });
+    resize(); raf = requestAnimationFrame(draw);
+  })();
 
   const PHASES = {
     live: ['alive', 'live'], launching: ['being born', 'warn'], dying: ['dying', 'warn'], resting: ['resting before rebirth', 'warn'],
@@ -63,18 +113,17 @@
     $('death-rule').textContent = l && l.status === 'live' ? `Born ${ago(l.bornAt)} · last buy ${l.lastBuyAt ? ago(l.lastBuyAt) : 'never'} · dev buy ${fmtEth(l.devBuyEth)} → ${Number(l.tokensBought).toLocaleString('en-US', { maximumFractionDigits: 0 })} tokens` : '';
 
     if (l) {
-      const mcapUsd = usd ? l.mcapEth * usd : null, peakUsd = usd ? l.peakMcapEth * usd : null;
-      $('s-mcap').textContent = usd ? fmtUsd(mcapUsd) : fmtEth(l.mcapEth, 3);
+      if (usd) setNum('s-mcap', l.mcapEth * usd, fmtUsd); else setNum('s-mcap', l.mcapEth, (v) => fmtEth(v, 3));
       $('s-mcap-eth').textContent = usd ? fmtEth(l.mcapEth, 3) : '';
-      $('s-peak').textContent = usd ? fmtUsd(peakUsd) : fmtEth(l.peakMcapEth, 3);
+      if (usd) setNum('s-peak', l.peakMcapEth * usd, fmtUsd); else setNum('s-peak', l.peakMcapEth, (v) => fmtEth(v, 3));
       $('s-peak-at').textContent = l.peakAt ? ago(l.peakAt) : '';
-      $('s-buys').textContent = l.buys;
+      setNum('s-buys', l.buys, (v) => String(Math.round(v)));
       $('s-biggest').textContent = Number(l.biggestBuyEth) > 0 ? 'biggest ' + fmtEth(l.biggestBuyEth) : 'from others';
-      $('s-fees').textContent = l.status === 'live' ? fmtEth(l.pendingFeesEth) : fmtEth(l.feesEth);
+      setNum('s-fees', Number(l.status === 'live' ? l.pendingFeesEth : l.feesEth), (v) => fmtEth(v));
       $('s-tax').textContent = s.rules.creatorTaxPct + '%';
       $('s-age').textContent = dur(l.bornAt, l.diedAt);
       $('s-born').textContent = l.status === 'live' ? 'and counting' : (l.deathReason || '');
-      $('s-grad').textContent = (l.graduationPct || 0).toFixed(1) + '%';
+      setNum('s-grad', l.graduationPct || 0, (v) => v.toFixed(1) + '%');
       $('s-raised').textContent = 'raised ' + fmtEth(l.raisedEth, 3);
       $('ca-row').hidden = false;
       $('ca').textContent = l.token;
@@ -87,8 +136,8 @@
     // pote
     const pot = Number(s.potEth || 0), cost = s.curveCost ? Number(s.curveCost.eth) : null;
     const pct = cost ? Math.min(100, pot / cost * 100) : 0;
-    $('pot-pct').textContent = cost ? pct.toFixed(1) + '%' : '—';
-    $('pot-fill').style.width = pct + '%';
+    if (cost) setNum('pot-pct', pct, (v) => v.toFixed(1) + '%'); else $('pot-pct').textContent = '—';
+    requestAnimationFrame(() => { $('pot-fill').style.width = pct + '%'; });
     $('pot-eth').textContent = fmtEth(s.potEth) + (usd ? ' · ' + fmtUsd(pot * usd) : '');
     $('curve-cost').textContent = cost ? fmtEth(cost, 3) + (usd ? ' · ' + fmtUsd(cost * usd) : '') : 'measuring…';
     const fb = $('final-box');
