@@ -260,9 +260,15 @@ export class Engine {
       await this.postOnce('needs_gas', { kind: 'needs_gas', balanceEth: eth(bal), neededEth: eth(needed), agent: this.agent }, 3600_000);
       return;
     }
-    const cost = await a.wholeCurveCost(terms);
-    s.curveCost = { eth: eth(cost.wei), tokens: fmtTokens(cost.tokensOut), at: cost.at };
-    if (pot >= cost.wei) return this.requestFinal(pot, cost);
+    // A curva inteira custa mais que o limiar de graduacao; so vale medir (24
+    // simulacoes seguidas, a RPC publica reclama) quando o pote chega perto.
+    if (pot >= (terms.graduationThreshold * 9n) / 10n) {
+      const cost = await a.wholeCurveCost(terms);
+      s.curveCost = { eth: eth(cost.wei), tokens: fmtTokens(cost.tokensOut), at: cost.at, measured: true };
+      if (pot >= cost.wei) return this.requestFinal(pot, cost);
+    } else if (!s.curveCost) {
+      s.curveCost = { eth: String(this.rules.finalCostEstimateEth || '4.75'), tokens: fmtTokens(terms.curveSellable), at: iso(this.now()), measured: false };
+    }
     await this.launch(pot, terms, { final: false });
   }
 
@@ -476,6 +482,8 @@ export class Engine {
       balanceEth: balanceWei !== null ? eth(balanceWei) : null,
       potEth: pot !== null ? eth(pot > 0n ? pot : 0n) : null,
       curveCost: s.curveCost,
+      pendingLaunch: s.pendingLaunch || null,
+      retryAfter: s.retryAfter || null,
       final: s.final,
       stats: s.stats,
       live,

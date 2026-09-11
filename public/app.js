@@ -149,7 +149,7 @@
     if (cost) setNum('pot-pct', pct, (v) => v.toFixed(1) + '%'); else $('pot-pct').textContent = '—';
     requestAnimationFrame(() => { $('pot-fill').style.width = pct + '%'; });
     $('pot-eth').textContent = fmtEth(s.potEth) + (usd ? ' · ' + fmtUsd(pot * usd) : '');
-    $('curve-cost').textContent = cost ? fmtEth(cost, 3) + (usd ? ' · ' + fmtUsd(cost * usd) : '') : 'measuring…';
+    $('curve-cost').textContent = cost ? fmtEth(cost, 3) + (usd ? ' · ' + fmtUsd(cost * usd) : '') + (s.curveCost.measured ? '' : ' (est.)') : 'measuring…';
     const fb = $('final-box');
     if (s.final) {
       fb.hidden = false;

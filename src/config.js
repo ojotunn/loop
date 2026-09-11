@@ -74,6 +74,8 @@ export const RULES = {
   minDevBuyEth: str('MIN_DEV_BUY_ETH', '0.001'),
   // Folga acima do custo da curva inteira no lancamento final (o router devolve a sobra).
   finalMarginPct: num('FINAL_MARGIN_PCT', 2),
+  // Estimativa do custo da curva inteira para a pagina, ate o pote chegar perto e medir.
+  finalCostEstimateEth: str('FINAL_COST_ESTIMATE_ETH', '4.75'),
   // Tolerancia de preco na venda da posicao morta.
   sellSlippagePct: num('SELL_SLIPPAGE_PCT', 3),
   // Compra de terceiros que merece um post.
