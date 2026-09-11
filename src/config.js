@@ -84,7 +84,9 @@ export const RULES = {
 
 // Carteira do agente: chave so por env. Sem chave, o motor roda em modo
 // observador (le a chain, nao assina nada).
-export const AGENT_PRIVATE_KEY = /^0x[0-9a-fA-F]{64}$/.test(process.env.AGENT_PRIVATE_KEY || '') ? process.env.AGENT_PRIVATE_KEY : null;
+// Aceita com ou sem 0x (o MetaMask exporta sem).
+const rawKey = String(process.env.AGENT_PRIVATE_KEY || '').trim().replace(/^0x/i, '');
+export const AGENT_PRIVATE_KEY = /^[0-9a-fA-F]{64}$/.test(rawKey) ? `0x${rawKey.toLowerCase()}` : null;
 
 // Quem autoriza a queima final e aperta os botoes internos: o token de admin,
 // digitado uma vez na pagina. Sem env, o servidor gera um e grava em DATA_DIR.
