@@ -81,11 +81,21 @@
     needs_gas: ['needs ETH to start', 'dead'], observer: ['observing (no key)', 'dead'], idle: ['about to start', 'warn'], error: ['retrying', 'warn'], blocked: ['blocked by pons', 'dead'],
   };
 
+  // Texto da regra de morte: so as regras ligadas aparecem; sem nenhuma, e o criador que decide.
+  function deathText(r) {
+    const parts = [];
+    if (r.deathIdleHours > 0) parts.push(`after ${r.deathIdleHours} h without a buy while the market cap sits below ${100 - r.deathDropPct}% of its peak`);
+    if (r.stillbornHours > 0) parts.push(`after ${r.stillbornHours} h with no buyer at all`);
+    if (r.maxLifeHours > 0) parts.push(`at ${r.maxLifeHours} h of age`);
+    if (!parts.length) return 'It dies when the creator looks at the curve and decides the loop is over (usually when only bots are left holding), or if it graduates.';
+    return `It dies ${parts.join(', ')}, when the creator decides, or if it graduates.`;
+  }
+
   function statusText(s) {
     const l = s.live;
     if (s.paused) return 'Paused by the creator. Nothing happens until it resumes.';
     switch (s.phase) {
-      case 'live': return `Loop #${l.n} is trading on pons. It dies after ${s.rules.deathIdleHours} h without a buy below ${100 - s.rules.deathDropPct}% of its peak, at ${s.rules.maxLifeHours} h of age, or when the creator says so.`;
+      case 'live': return `Loop #${l.n} is trading on pons. ${deathText(s.rules)}`;
       case 'resting': return `The last loop is dead. The next one is born ${s.restUntil ? 'at ' + new Date(s.restUntil).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'soon'} with the whole pot.`;
       case 'awaiting_authorization': return `The pot covers the whole curve. The agent is waiting for its creator to authorize the final burn. No loop is launched until then.`;
       case 'final_done': return `The last loop bought the entire curve at birth and burned every token. There is no loop after this one.`;
@@ -175,9 +185,7 @@
 
     // regras
     $('how-tax').textContent = s.rules.creatorTaxPct + '%';
-    $('how-idle').textContent = s.rules.deathIdleHours;
-    $('how-floor').textContent = (100 - s.rules.deathDropPct) + '%';
-    $('how-life').textContent = s.rules.maxLifeHours;
+    $('how-death').textContent = deathText(s.rules).replace(/^It dies/, 'A loop dies');
     $('how-rest').textContent = s.rules.rebirthDelayMin;
     $('agent-addr').textContent = s.agent;
     $('agent-explorer').href = `${s.links.explorer}/address/${s.agent}`;

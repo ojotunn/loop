@@ -57,13 +57,15 @@ export const TOKEN = {
 // As regras do jogo. Horas e porcentagens; o motor le isto a cada ciclo.
 export const RULES = {
   tickSec: num('TICK_SEC', 60),
-  // Morte: X horas sem nenhuma compra de terceiros E mcap abaixo de (100 - drop)% do pico.
-  deathIdleHours: num('DEATH_IDLE_HOURS', 6),
+  // Mortes automaticas: 0 = desligada. Padrao TUDO desligado (decisao do Michel,
+  // 11/09/2026): ele olha se so tem bot segurando e encerra o loop pelo botao.
+  // X horas sem nenhuma compra de terceiros E mcap abaixo de (100 - drop)% do pico.
+  deathIdleHours: num('DEATH_IDLE_HOURS', 0),
   deathDropPct: num('DEATH_DROP_PCT', 80),
   // Morte por idade, aconteca o que acontecer.
-  maxLifeHours: num('MAX_LIFE_HOURS', 48),
+  maxLifeHours: num('MAX_LIFE_HOURS', 0),
   // Natimorto: ninguem alem do agente comprou em X horas.
-  stillbornHours: num('STILLBORN_HOURS', 6),
+  stillbornHours: num('STILLBORN_HOURS', 0),
   // Pausa entre a morte e o proximo nascimento (para o mundo ver).
   rebirthDelayMin: num('REBIRTH_DELAY_MIN', 15),
   // ETH que nunca entra no pote (gas das proximas transacoes).

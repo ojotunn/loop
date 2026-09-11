@@ -115,7 +115,7 @@
   <ol class="rules">
     <li><b>Birth.</b> The agent launches <span class="sym-text">$LOOP</span> on pons v2 (Robinhood Chain) and buys itself in the same transaction with the whole pot. Same name, same ticker, every time.</li>
     <li><b>Life.</b> People trade. The creator tax (<span id="how-tax">10%</span>) accrues to the agent's own wallet. It watches buys, peak and graduation.</li>
-    <li><b>Death.</b> A loop dies when <span id="how-idle">6</span> hours pass without a buy and the market cap sits below <span id="how-floor">20%</span> of its peak, when it turns <span id="how-life">48</span> hours old, or when the creator presses the button. If it graduates instead, the position stays in the pool and only the fees move on.</li>
+    <li><b>Death.</b> <span id="how-death">A loop dies when the creator looks at the curve and decides the loop is over, or if it graduates.</span> If it graduates, the position stays in the pool and only the fees move on.</li>
     <li><b>Rebirth.</b> The agent sells its position back to the curve, sweeps and claims the fees, rests <span id="how-rest">15</span> minutes, and launches the next loop with all of it.</li>
     <li><b>The end.</b> When the pot covers the whole curve, the agent asks its creator for authorization. With it, the last loop is born, the whole curve is bought at birth, and every token is burned. There is no loop after that.</li>
   </ol>

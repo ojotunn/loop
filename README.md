@@ -10,15 +10,15 @@ A token that is born, dies, and is born again from its own creator fees, on pons
 
 | Rule | Default | Meaning |
 | --- | --- | --- |
-| `DEATH_IDLE_HOURS` | 6 | hours without a third-party buy… |
+| `DEATH_IDLE_HOURS` | 0 (off) | hours without a third-party buy… |
 | `DEATH_DROP_PCT` | 80 | …while mcap sits below (100-80)=20% of the peak → dead |
-| `MAX_LIFE_HOURS` | 48 | dies at this age no matter what |
-| `STILLBORN_HOURS` | 6 | nobody ever bought → dead |
+| `MAX_LIFE_HOURS` | 0 (off) | dies at this age no matter what |
+| `STILLBORN_HOURS` | 0 (off) | nobody ever bought → dead |
 | `REBIRTH_DELAY_MIN` | 15 | pause between death and the next launch |
 | `GAS_RESERVE_ETH` | 0.003 | never spent on a launch |
 | `CREATOR_TAX_BPS` | 200 | 2% (pons allows up to 10%) |
 
-The creator also has a button: **Sell & launch the next**. Zero holders never happens on its own.
+By default every automatic death is off (0): the creator looks at the curve and presses **Sell & launch the next** when only bots are left. Set hours above 0 to turn a rule on.
 
 ## Running
 

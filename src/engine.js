@@ -122,15 +122,20 @@ export class Engine {
     s.phase = 'live';
   }
 
+  // Regras automaticas de morte. Cada uma com 0 esta DESLIGADA; o padrao e tudo
+  // desligado: o Michel olha a curva e encerra o loop pelo botao.
   deathReason(loop) {
+    const r = this.rules;
     const now = this.now();
     const born = Date.parse(loop.bornAt);
     const ageH = (now - born) / H;
     const idleH = (now - (loop.lastBuyAt ? Date.parse(loop.lastBuyAt) : born)) / H;
-    if (ageH >= this.rules.maxLifeHours) return 'max life reached';
-    if (loop.buys === 0 && ageH >= this.rules.stillbornHours) return 'stillborn';
-    const floor = (loop.peakMcapEth || 0) * (1 - this.rules.deathDropPct / 100);
-    if (idleH >= this.rules.deathIdleHours && (loop.mcapEth || 0) <= floor) return 'no buys and mcap below the floor';
+    if (r.maxLifeHours > 0 && ageH >= r.maxLifeHours) return 'max life reached';
+    if (r.stillbornHours > 0 && loop.buys === 0 && ageH >= r.stillbornHours) return 'stillborn';
+    if (r.deathIdleHours > 0) {
+      const floor = (loop.peakMcapEth || 0) * (1 - r.deathDropPct / 100);
+      if (idleH >= r.deathIdleHours && (loop.mcapEth || 0) <= floor) return 'no buys and mcap below the floor';
+    }
     return null;
   }
 

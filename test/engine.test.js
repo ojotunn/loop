@@ -232,6 +232,21 @@ test('the end: pot covers the curve -> asks, waits, launches and burns only afte
   assert.equal(state.loops.length, 2);
 });
 
+test('with the automatic rules off (0), a loop only dies by the button', async () => {
+  const chain = new FakeChain();
+  const state = emptyState();
+  const eng = new Engine({ adapter: chain, state, save: () => {}, rules: { ...rules, deathIdleHours: 0, maxLifeHours: 0, stillbornHours: 0 }, publish: null, log: { log() {} } });
+  await eng.tick();
+  const loop = state.loops[0];
+  chain.advance(200 * H);            // oito dias sem ninguem comprar, mcap no chao
+  chain.setMcap(loop.curve, 0.01);
+  await eng.tick();
+  assert.equal(loop.status, 'live');
+  await eng.kill();
+  assert.equal(loop.status, 'dead');
+  assert.match(loop.deathReason, /manual/);
+});
+
 test('authorize outside the gate is refused', () => {
   const { eng } = make();
   assert.throws(() => eng.authorizeFinal(), /nothing to authorize/);
