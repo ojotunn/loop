@@ -50,7 +50,7 @@ export const TOKEN = {
   website: str('LOOP_WEBSITE', ''),
   twitter: str('LOOP_TWITTER', ''),
   telegram: str('LOOP_TELEGRAM', ''),
-  creatorTaxBps: num('CREATOR_TAX_BPS', 1000),
+  creatorTaxBps: num('CREATOR_TAX_BPS', 200),
   launchConfigId: BigInt(str('PONS_LAUNCH_CONFIG_ID', '0')),
 };
 

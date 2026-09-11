@@ -16,7 +16,7 @@ A token that is born, dies, and is born again from its own creator fees, on pons
 | `STILLBORN_HOURS` | 6 | nobody ever bought → dead |
 | `REBIRTH_DELAY_MIN` | 15 | pause between death and the next launch |
 | `GAS_RESERVE_ETH` | 0.003 | never spent on a launch |
-| `CREATOR_TAX_BPS` | 1000 | 10%, the pons maximum |
+| `CREATOR_TAX_BPS` | 200 | 2% (pons allows up to 10%) |
 
 The creator also has a button: **Sell & launch the next**. Zero holders never happens on its own.
 
