@@ -90,6 +90,9 @@ export const ADMIN_TOKEN = str('ADMIN_TOKEN', '') || null;
 
 export const PORT = num('PORT', 8437);
 export const PUBLIC_URL = (process.env.PUBLIC_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
+// Com CANONICAL_HOST, paginas pedidas por outro host (railway.app, www) redirecionam
+// para o dominio proprio. /api nao redireciona.
+export const CANONICAL_HOST = str('CANONICAL_HOST', '').toLowerCase() || null;
 export const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data');
 export const PONS_TOKEN_URL = process.env.PONS_TOKEN_URL || 'https://www.ponsfamily.com/launchpad/{token}';
 export const APP_NAME = 'Loop';

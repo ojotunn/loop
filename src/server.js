@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import express from 'express';
 import { fileURLToPath } from 'node:url';
-import { PORT, PUBLIC_URL, DATA_DIR, ADMIN_TOKEN, RULES, CHAIN, TOKEN, LINKS, VERSION, X_CREDS, TELEGRAM, PONS_TOKEN_URL } from './config.js';
+import { PORT, PUBLIC_URL, DATA_DIR, ADMIN_TOKEN, RULES, CHAIN, TOKEN, LINKS, VERSION, X_CREDS, TELEGRAM, PONS_TOKEN_URL, CANONICAL_HOST } from './config.js';
 import { loadState, saveState } from './state.js';
 import { Engine } from './engine.js';
 import { realAdapter } from './adapter.js';
@@ -81,6 +81,9 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '8kb' }));
 app.use((req, res, next) => {
+  if (CANONICAL_HOST && req.method === 'GET' && !req.path.startsWith('/api/') && String(req.hostname || '').toLowerCase() !== CANONICAL_HOST) {
+    return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+  }
   res.setHeader('X-Content-Type-Options', 'nosniff');
   // QA_ALLOW_FRAMING so para a captura mobile por iframe no Edge headless.
   if (!process.env.QA_ALLOW_FRAMING) res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
