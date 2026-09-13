@@ -84,11 +84,14 @@ export const RULES = {
   gasReserveEth: str('GAS_RESERVE_ETH', '0.003'),
   // Menor dev buy que vale um lancamento.
   minDevBuyEth: str('MIN_DEV_BUY_ETH', '0.001'),
-  // Teto da compra de nascimento. 0 = sem teto (o loop nasce com o pote todo).
-  // Com o pote grande, gastar tudo no nascimento gradua em minutos e a posicao
-  // fica presa no pool: o dinheiro do Loop vem da taxa sobre o volume da curva,
-  // nao da graduacao (medido nos loops 1 e 2 em 13/09/2026).
-  maxLaunchEth: str('LAUNCH_MAX_ETH', '0.15'),
+  // Teto da compra de nascimento. 0 = sem teto: o loop nasce com o pote todo,
+  // que e a preferencia do Michel (13/09/2026).
+  maxLaunchEth: str('LAUNCH_MAX_ETH', '0'),
+  // Trava contra a armadilha da graduacao: com o pote inteiro o loop nasce perto
+  // do limiar e, se graduar, a posicao fica presa num pool raso. Com esta regra
+  // ligada o agente encerra o loop ANTES de graduar, vendendo na curva, onde a
+  // saida e justa. 0 = desligada. Medido: no pool a mesma posicao rende ~1/4.
+  exitAtGraduationPct: num('EXIT_AT_GRADUATION_PCT', 0),
   // Folga acima do custo da curva inteira no lancamento final (o router devolve a sobra).
   finalMarginPct: num('FINAL_MARGIN_PCT', 2),
   // Estimativa do custo da curva inteira para a pagina, ate o pote chegar perto e medir.

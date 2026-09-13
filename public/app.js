@@ -88,6 +88,7 @@
     if (r.deathIdleHours > 0) parts.push(`after ${r.deathIdleHours} h without a buy while the market cap sits below ${100 - r.deathDropPct}% of its peak`);
     if (r.stillbornHours > 0) parts.push(`after ${r.stillbornHours} h with no buyer at all`);
     if (r.maxLifeHours > 0) parts.push(`at ${r.maxLifeHours} h of age`);
+    if (r.exitAtGraduationPct > 0) parts.push(`at ${r.exitAtGraduationPct}% of the way to graduation`);
     if (!parts.length) return 'It dies when the buying stops and only bots are left holding, or when it graduates.';
     return `It dies ${parts.join(', ')}, when the buying stops, or when it graduates.`;
   }

@@ -189,6 +189,7 @@ export class Engine {
     const born = Date.parse(loop.bornAt);
     const ageH = (now - born) / H;
     const idleH = (now - (loop.lastBuyAt ? Date.parse(loop.lastBuyAt) : born)) / H;
+    if (r.exitAtGraduationPct > 0 && (loop.graduationPct || 0) >= r.exitAtGraduationPct) return 'the curve was about to close';
     if (r.maxLifeHours > 0 && ageH >= r.maxLifeHours) return 'max life reached';
     if (r.stillbornHours > 0 && loop.buys === 0 && ageH >= r.stillbornHours) return 'stillborn';
     if (r.deathIdleHours > 0) {
@@ -678,6 +679,7 @@ export class Engine {
         stillbornHours: this.rules.stillbornHours, rebirthDelayMin: this.rules.rebirthDelayMin, gasReserveEth: this.rules.gasReserveEth,
         creatorTaxPct: TOKEN.creatorTaxBps / 100, manualLaunch: !!this.rules.manualLaunch,
         maxLaunchEth: this.rules.maxLaunchEth || '0',
+        exitAtGraduationPct: this.rules.exitAtGraduationPct || 0,
       },
       ethUsd,
       balanceEth: balanceWei !== null ? eth(balanceWei) : null,

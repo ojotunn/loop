@@ -360,6 +360,23 @@ test('selling the leftover of a graduated loop goes through the pool and lands a
   await assert.rejects(eng.sellLeftover(), /nothing left to sell/);
 });
 
+test('the graduation guard closes the loop on the curve instead of letting it migrate', async () => {
+  const chain = new FakeChain({ balance: '0.06' });
+  const state = emptyState();
+  const eng = new Engine({ adapter: chain, state, save: () => {}, rules: { ...rules, exitAtGraduationPct: 90 }, publish: null, log: { log() {} } });
+  await eng.tick();
+  const loop = state.loops[0];
+  // a curva sobe ate 95% do limiar de graduacao
+  chain.rec(loop.curve).state.realQuote = E('3.99');
+  chain.buy(loop.curve, '1');
+  chain.advance(60_000);
+  await eng.tick();
+  assert.equal(loop.status, 'dead');
+  assert.equal(loop.deathReason, 'the curve was about to close');
+  assert.ok(chain.calls.some((c) => c[0] === 'sell'), 'vende na curva, onde a saida e justa');
+  assert.ok(Number(loop.soldEth) > 0);
+});
+
 test('authorize outside the gate is refused', () => {
   const { eng } = make();
   assert.throws(() => eng.authorizeFinal(), /nothing to authorize/);
