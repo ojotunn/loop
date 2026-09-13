@@ -64,6 +64,18 @@ class FakeChain {
   async sweep({ curve }) { this.calls.push(['sweep']); const r = this.rec(curve); this.escrow += r.state.unswept; r.state.unswept = 0n; return { ok: true, hash: '0xsweep' }; }
   async claim() { this.calls.push(['claim', formatEther(this.escrow)]); this.bal += this.escrow; this.escrow = 0n; return { ok: true, hash: '0xclaim' }; }
   async burn({ token, amount }) { this.calls.push(['burn', formatEther(amount)]); this.tokens.get(token).held -= amount; return { ok: true, hash: '0xburn' }; }
+  // pool da Uniswap depois da graduacao: paga 1 ETH por 2000 tokens
+  async poolKeyFor(token) { return { currency0: '0x0', currency1: token, fee: 0, tickSpacing: 200, hooks: '0xH00K' }; }
+  async approveForPool({ token, amount }) { this.calls.push(['approveForPool', formatEther(amount)]); return [{ label: 'approve permit2', hash: '0xapp', ok: true }]; }
+  async quotePoolSell({ token, amountIn }) { return { poolKey: await this.poolKeyFor(token), out: amountIn / 2000n }; }
+  async sellOnPool({ poolKey, amountIn, minOut }) {
+    this.calls.push(['sellOnPool', formatEther(amountIn)]);
+    assert.ok(minOut <= amountIn / 2000n);
+    const r = this.rec(poolKey.currency1 ? this.tokens.get(poolKey.currency1)?.curve : null) || null;
+    this.tokens.get(poolKey.currency1).held -= amountIn;
+    this.bal += amountIn / 2000n;
+    return { ok: true, hash: '0xpoolsell' };
+  }
   // helpers
   buy(curve, eth, who = '0xB0B') { const r = this.rec(curve); r.buys.push({ recipient: who, quoteIn: E(eth), block: this.block }); r.state.unswept += E(eth) / 10n; }
   setMcap(curve, m) { this.rec(curve).state.mcapEth = m; }
@@ -311,6 +323,41 @@ test('graduation: nothing is sold, the loop is marked migrated, and late fees st
   assert.equal(loop.feesEth, '0.8');
   assert.equal(state.stats.feesTotalEth, '0.8');
   assert.equal(state.loops.length, 1, 'still no automatic relaunch');
+});
+
+test('with a launch cap the loop is seeded, and the rest of the pot stays for the end', async () => {
+  const chain = new FakeChain({ balance: '2.2' });
+  const state = emptyState();
+  const eng = new Engine({ adapter: chain, state, save: () => {}, rules: { ...rules, maxLaunchEth: '0.15' }, publish: null, log: { log() {} } });
+  await eng.tick();
+  assert.equal(state.loops[0].devBuyEth, '0.15', 'nasce com a semente, nao com o pote');
+  assert.ok(chain.bal > E('2'), 'o resto do pote continua na carteira');
+  // sem teto, o mesmo pote iria inteiro para o nascimento
+  const c2 = new FakeChain({ balance: '2.2' });
+  const s2 = emptyState();
+  await new Engine({ adapter: c2, state: s2, save: () => {}, rules: { ...rules, maxLaunchEth: '0' }, publish: null, log: { log() {} } }).tick();
+  assert.equal(s2.loops[0].devBuyEth, '2.1965');
+});
+
+test('selling the leftover of a graduated loop goes through the pool and lands as a sale', async () => {
+  const { chain, state, eng } = make({ balance: '0.06' });
+  await eng.tick();
+  const loop = state.loops[0];
+  chain.rec(loop.curve).state.graduated = true;
+  chain.advance(60_000);
+  await eng.tick();
+  assert.equal(loop.status, 'graduated');
+  const held = await chain.tokenBalance(loop.token);
+  assert.ok(held > 0n, 'a posicao fica presa no pool depois de graduar');
+  const r = await eng.sellLeftover();
+  assert.equal(r.loop, 1);
+  assert.ok(chain.calls.some((c) => c[0] === 'approveForPool'));
+  assert.ok(chain.calls.some((c) => c[0] === 'sellOnPool'));
+  assert.equal(await chain.tokenBalance(loop.token), 0n);
+  await eng.tick();
+  assert.ok(Number(loop.soldEth) > 0, 'o ETH da venda entra como venda, nao como taxa');
+  assert.equal(loop.feesEth, '0', 'e nao infla as taxas');
+  await assert.rejects(eng.sellLeftover(), /nothing left to sell/);
 });
 
 test('authorize outside the gate is refused', () => {

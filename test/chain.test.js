@@ -84,6 +84,6 @@ test('buy events can be read from the curve', async () => {
 
 test('the agent wallet exposes only launch, sell, sweep, claim and burn', () => {
   const w = chain.agentWallet('0x' + '11'.repeat(32));
-  assert.deepEqual(Object.keys(w).sort(), ['address', 'burn', 'claim', 'launch', 'sell', 'sweep']);
+  assert.deepEqual(Object.keys(w).sort(), ['address', 'approveForPool', 'burn', 'claim', 'launch', 'sell', 'sellOnPool', 'sweep']);
   assert.match(w.address, /^0x/);
 });

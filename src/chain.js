@@ -1,16 +1,17 @@
-// Tudo que toca a Robinhood Chain. Leitura livre; escrita so pela carteira do
-// agente e so pelas cinco funcoes do fim do arquivo: lancar, vender, varrer,
-// sacar e queimar. Nao existe "mandar ETH para X" aqui de proposito: a
-// carteira so fala com a pons, com a curva do proprio token e com o endereco
-// de queima. Quem tem a chave (o Michel) faz o resto pela propria carteira.
+// Tudo que toca a Robinhood Chain. Leitura livre; escrita so pelas funcoes da
+// carteira do agente no fim do arquivo: lancar, vender na curva, varrer, sacar,
+// queimar, aprovar a venda no pool e vender no pool. Nao existe "mandar ETH
+// para X" de proposito: a carteira so fala com a pons, com a curva do proprio
+// token, com o Permit2/Universal Router da Uniswap e com o endereco de queima.
+// Quem tem a chave (o Michel) faz o resto pela propria carteira.
 import crypto from 'node:crypto';
 import {
   createPublicClient, createWalletClient, http, defineChain, encodeFunctionData, decodeFunctionResult, encodeAbiParameters, keccak256, toHex, pad,
   decodeErrorResult, parseEventLogs, parseEther, formatEther, formatUnits, getAddress,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { CHAIN, CONTRACTS, ZERO_ADDRESS, TOKEN } from './config.js';
-import { FACTORY_ABI, ROUTER_ABI, CURVE_ABI, ERC20_ABI, ESCROW_ABI, ALL_ERRORS, DEAD_ADDRESS } from './abi.js';
+import { CHAIN, CONTRACTS, ZERO_ADDRESS, TOKEN, V4 as CONTRACTS_V4 } from './config.js';
+import { FACTORY_ABI, ROUTER_ABI, CURVE_ABI, ERC20_ABI, ESCROW_ABI, ALL_ERRORS, DEAD_ADDRESS, UNIVERSAL_ROUTER_ABI, PERMIT2_ABI, EXACT_IN_SINGLE, V4_ACTIONS, V4_SWAP_COMMAND } from './abi.js';
 
 export { parseEther, formatEther, formatUnits, getAddress, DEAD_ADDRESS };
 
@@ -223,6 +224,89 @@ export async function quoteSell({ curve, token, from, tokensIn }) {
 }
 
 // ---------------------------------------------------------------------------
+// Venda no pool Uniswap v4, para quando o token ja graduou e a curva fechou.
+// O caminho e o mesmo que qualquer pessoa usa no site da pons: o Universal
+// Router executa o swap e puxa o token pelo Permit2.
+const MAX_UINT256 = (1n << 256n) - 1n;
+const MAX_UINT160 = (1n << 160n) - 1n;
+const MAX_UINT48 = (1n << 48n) - 1n;
+
+let hookCache = null;
+export async function memeHook() {
+  if (!hookCache) hookCache = await client.readContract({ ...factory, functionName: 'memeHook' });
+  return hookCache;
+}
+
+// A chave do pool vem da chain: pares e taxa saem do registro do token na pons.
+export async function poolKeyFor(token) {
+  const launched = await client.readContract({ ...factory, functionName: 'getLaunchedToken', args: [token] });
+  if (!launched?.exists) throw new Error('this token was not launched by pons');
+  if (launched.pairToken !== ZERO_ADDRESS) throw new Error('only ETH-paired pools are supported');
+  return {
+    currency0: ZERO_ADDRESS,
+    currency1: getAddress(token),
+    fee: Number(launched.poolFee),
+    tickSpacing: Number(launched.tickSpacing),
+    hooks: await memeHook(),
+  };
+}
+
+export function buildPoolSellTx({ poolKey, amountIn, minOut, deadline }) {
+  const actions = `0x${V4_ACTIONS.SWAP_EXACT_IN_SINGLE.toString(16).padStart(2, '0')}${V4_ACTIONS.SETTLE_ALL.toString(16).padStart(2, '0')}${V4_ACTIONS.TAKE_ALL.toString(16).padStart(2, '0')}`;
+  const params = [
+    encodeAbiParameters([EXACT_IN_SINGLE], [{ poolKey, zeroForOne: false, amountIn, amountOutMinimum: minOut, hookData: '0x' }]),
+    encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [poolKey.currency1, amountIn]),
+    encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [poolKey.currency0, minOut]),
+  ];
+  const input = encodeAbiParameters([{ type: 'bytes' }, { type: 'bytes[]' }], [actions, params]);
+  return {
+    to: CONTRACTS_V4.router,
+    data: encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [V4_SWAP_COMMAND, [input], deadline] }),
+    value: 0n,
+  };
+}
+
+// Quanto a venda rende, sem gastar nada: o TAKE_ALL reverte quando a saida fica
+// abaixo do minimo, entao uma busca binaria no minimo devolve o valor exato.
+// Precisa das aprovacoes ja feitas (senao o eth_call falha por allowance).
+// Overrides que fingem as duas aprovacoes (token->Permit2 e Permit2->router),
+// para cotar antes de aprovar. No Permit2, `allowance` e o slot 1 e o valor e
+// empacotado: amount (uint160) | expiration << 160 | nonce << 208.
+async function poolSellOverrides({ token, owner, amount }) {
+  const overrides = [];
+  try { overrides.push(...(await allowanceOverride({ token, owner, spender: CONTRACTS_V4.permit2, amount }))); } catch { /* sem override, tenta assim mesmo */ }
+  const inner = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [owner, 1n]));
+  const mid = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }], [token, inner]));
+  const slot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }], [CONTRACTS_V4.router, mid]));
+  const packed = MAX_UINT160 | (MAX_UINT48 << 160n);
+  overrides.push({ address: CONTRACTS_V4.permit2, stateDiff: [{ slot, value: pad(toHex(packed), { size: 32 }) }] });
+  return overrides;
+}
+
+export async function quotePoolSell({ token, from, amountIn, deadline }) {
+  const poolKey = await poolKeyFor(token);
+  const stateOverride = await poolSellOverrides({ token, owner: from, amount: amountIn }).catch(() => undefined);
+  const works = async (minOut) => {
+    const tx = buildPoolSellTx({ poolKey, amountIn, minOut, deadline });
+    try { await client.call({ account: from, to: tx.to, data: tx.data, value: 0n, stateOverride }); return true; } catch { return false; }
+  };
+  if (!(await works(0n))) throw new Error('the pool refused the swap (check the Permit2 approvals)');
+  let lo = 0n, hi = parseEther('50');
+  if (await works(hi)) return { poolKey, out: hi };
+  for (let i = 0; i < 26 && hi - lo > 10n ** 12n; i++) {
+    const mid = (lo + hi) / 2n;
+    if (await works(mid)) lo = mid; else hi = mid;
+    await new Promise((r) => setTimeout(r, 120));
+  }
+  return { poolKey, out: lo };
+}
+
+export const permit2Allowance = (owner, token) =>
+  client.readContract({ address: CONTRACTS_V4.permit2, abi: PERMIT2_ABI, functionName: 'allowance', args: [owner, token, CONTRACTS_V4.router] });
+export const erc20Allowance = (token, owner, spender) =>
+  client.readContract({ address: token, abi: ERC20_ABI, functionName: 'allowance', args: [owner, spender] });
+
+// ---------------------------------------------------------------------------
 // Erros da pons em linguagem de gente.
 const HUMAN = {
   NotWhitelisted: 'pons is only accepting launches from whitelisted wallets right now',
@@ -306,6 +390,32 @@ export function agentWallet(privateKey) {
     // Saca o que o escrow deve ao agente (ETH nativo).
     async claim() {
       const hash = await wallet.writeContract({ ...escrow, functionName: 'claim' });
+      return confirm(hash);
+    },
+
+    // Aprovacoes da venda no pool: o token so autoriza o Permit2, e o Permit2
+    // so autoriza o Universal Router. Nenhum outro destino.
+    async approveForPool({ token, amount }) {
+      const done = [];
+      if ((await erc20Allowance(token, address, CONTRACTS_V4.permit2)) < amount) {
+        const r = await confirm(await wallet.writeContract({ address: token, abi: ERC20_ABI, functionName: 'approve', args: [CONTRACTS_V4.permit2, MAX_UINT256] }));
+        done.push({ label: 'approve permit2', hash: r.hash, ok: r.ok });
+        if (!r.ok) return done;
+      }
+      const [amt, exp] = await permit2Allowance(address, token);
+      const soon = BigInt(Math.floor(Date.now() / 1000)) + 900n;
+      if (BigInt(amt) < amount || BigInt(exp) < soon) {
+        const r = await confirm(await wallet.writeContract({ address: CONTRACTS_V4.permit2, abi: PERMIT2_ABI, functionName: 'approve', args: [token, CONTRACTS_V4.router, MAX_UINT160, MAX_UINT48] }));
+        done.push({ label: 'approve router', hash: r.hash, ok: r.ok });
+      }
+      return done;
+    },
+
+    // Venda no pool v4 do proprio token, pelo Universal Router. O ETH volta
+    // para esta carteira; a calldata e montada aqui, nao vem de fora.
+    async sellOnPool({ poolKey, amountIn, minOut, deadline }) {
+      const tx = buildPoolSellTx({ poolKey, amountIn, minOut, deadline });
+      const hash = await wallet.sendTransaction({ to: tx.to, data: tx.data, value: 0n });
       return confirm(hash);
     },
 

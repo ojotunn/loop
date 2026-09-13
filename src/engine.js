@@ -21,6 +21,16 @@ const short = (e) => String(e?.shortMessage || e?.message || e).split('\n')[0].s
 // carteira. Valor reconstruido pela aritmetica do saldo on-chain em 13/09/2026:
 // saldo final - venda - claim - saldo no nascimento. Loops novos medem sozinhos.
 const BACKFILL_FEES = { '0xbfbd1fe7bb87e4e727563e7f7bdf0cdce5353d87': '2.113878669949326248' };
+// O loop 2 graduou e a posicao foi vendida no pool na mao, em 13/09/2026, antes
+// de existir o botao. Numeros lidos da chain: 1,614968… ETH entraram e a
+// carteira ficou com zero token do loop 2.
+const BACKFILL_SALE = {
+  '0xf01439e2a3f5f032db9b19c1e7fbcd985d841bd0': {
+    soldEth: '1.614968272218709253',
+    balanceAfterEth: '2.201988308446399962',
+    tokensAfterWei: '0',
+  },
+};
 // Menor saque que vale uma transacao (o gas de um claim e ~0,000003 ETH).
 const MIN_CLAIM = parseEther('0.0005');
 
@@ -45,6 +55,14 @@ export class Engine {
       s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth || '0') - parseEther(l.feesEth || '0') + parseEther(right));
       l.feesEth = right;
       l.feesBackfilled = true;
+      changed = true;
+    }
+    for (const l of s.loops || []) {
+      const sale = BACKFILL_SALE[String(l.token).toLowerCase()];
+      if (!sale || l.saleBackfilled) continue;
+      s.stats.soldTotalEth = eth(parseEther(s.stats.soldTotalEth || '0') - parseEther(l.soldEth || '0') + parseEther(sale.soldEth));
+      Object.assign(l, sale);
+      l.saleBackfilled = true;
       changed = true;
     }
     // Loop encerrado antes de existir o acerto de contas: zera e deixa o
@@ -215,6 +233,7 @@ export class Engine {
     loop.soldEth = eth(soldWei);
     loop.feesEth = eth(fees + directFees);
     loop.balanceAfterEth = eth(await a.balance().catch(() => 0n));
+    loop.tokensAfterWei = (await a.tokenBalance(loop.token).catch(() => 0n)).toString();
     loop.txs = [...(loop.txs || []), ...txs];
     s.stats.loopsDead += 1;
     s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth) + fees + directFees);
@@ -262,12 +281,29 @@ export class Engine {
     if (!last || last.status === 'live' || !last.balanceAfterEth) return;
     const now = await this.adapter.balance().catch(() => null);
     if (now === null) return;
+
+    // Marca quantos tokens do loop morto a carteira ainda tem. Se esse numero
+    // cair, alguem vendeu a posicao (inclusive na mao, pelo pool da Uniswap
+    // depois da graduacao) e o ETH que entrou e venda, nao taxa.
+    let sold = false;
+    const held = await this.adapter.tokenBalance(last.token).catch(() => null);
+    if (held !== null) {
+      if (last.tokensAfterWei === undefined) last.tokensAfterWei = held.toString();
+      else if (held < BigInt(last.tokensAfterWei)) { sold = true; last.tokensAfterWei = held.toString(); }
+    }
+
     const before = parseEther(last.balanceAfterEth);
     if (now <= before) return;
     const delta = now - before;
-    last.feesEth = eth(parseEther(last.feesEth || '0') + delta);
+    if (sold) {
+      last.soldEth = eth(parseEther(last.soldEth || '0') + delta);
+      s.stats.soldTotalEth = eth(parseEther(s.stats.soldTotalEth || '0') + delta);
+      this.note('sold', `position of loop #${last.n} sold: ${eth(delta)} ETH into the pot`);
+    } else {
+      last.feesEth = eth(parseEther(last.feesEth || '0') + delta);
+      s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth || '0') + delta);
+    }
     last.balanceAfterEth = eth(now);
-    s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth || '0') + delta);
   }
 
   async collect(loop, cs, txs) {
@@ -304,6 +340,7 @@ export class Engine {
     loop.migrated = true;
     loop.feesEth = eth(fees + directFees);
     loop.balanceAfterEth = eth(await this.adapter.balance().catch(() => 0n));
+    loop.tokensAfterWei = (await this.adapter.tokenBalance(loop.token).catch(() => 0n)).toString();
     loop.txs = [...(loop.txs || []), ...txs];
     s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth) + fees + directFees);
     s.restUntil = iso(this.now() + this.rules.rebirthDelayMin * 60_000);
@@ -362,7 +399,10 @@ export class Engine {
     } else if (!s.curveCost) {
       s.curveCost = { eth: String(this.rules.finalCostEstimateEth || '4.75'), tokens: fmtTokens(terms.curveSellable), at: iso(this.now()), measured: false };
     }
-    await this.launch(pot, terms, { final: false });
+    // Com teto, o loop nasce com uma semente e o resto do pote fica guardado
+    // para o fim; sem teto, nasce com tudo.
+    const cap = parseEther(String(this.rules.maxLaunchEth || '0'));
+    await this.launch(cap > 0n && pot > cap ? cap : pot, terms, { final: false });
   }
 
   noteOnce(kind, text, everyMs = 3600_000) {
@@ -572,6 +612,46 @@ export class Engine {
     return { launchRequested: true };
   }
 
+  // Vende no pool da Uniswap o que sobrou de um loop que graduou. A curva desse
+  // loop esta fechada, entao a venda normal nao serve. So pelo painel.
+  async sellLeftover({ slippagePct = 5 } = {}) {
+    const s = this.state;
+    const a = this.adapter;
+    if (!a.canSign) throw new Error('observer mode: no key to sign with');
+    if (this.busy) throw new Error('busy; try again in a moment');
+    if (this.liveLoop()) throw new Error('a loop is still live; end it first');
+    const loop = [...s.loops].reverse().find((l) => l.status !== 'live');
+    if (!loop) throw new Error('no finished loop to sell');
+    const held = await a.tokenBalance(loop.token);
+    if (held === 0n) throw new Error(`loop #${loop.n} has nothing left to sell`);
+    this.busy = true;
+    try {
+      const deadline = BigInt(Math.floor(this.now() / 1000) + 900);
+      const approvals = await a.approveForPool({ token: loop.token, amount: held });
+      loop.txs = [...(loop.txs || []), ...approvals];
+      const { poolKey, out } = await a.quotePoolSell({ token: loop.token, amountIn: held, deadline });
+      if (out <= 0n) throw new Error('the pool would pay nothing for this position');
+      const minOut = (out * BigInt(100 - slippagePct)) / 100n;
+      const r = await a.sellOnPool({ poolKey, amountIn: held, minOut, deadline });
+      loop.txs.push({ label: 'pool sell', hash: r.hash, ok: r.ok });
+      if (!r.ok) throw new Error(`the pool swap reverted (${r.hash})`);
+      this.note('sold', `sold what was left of loop #${loop.n} on the pool, about ${eth(out)} ETH`);
+      this.save(s);
+      await this.settleLast();
+      return { loop: loop.n, tokens: fmtTokens(held), expectedEth: eth(out) };
+    } finally { this.save(s); this.busy = false; }
+  }
+
+  // Quanto vale, hoje, a sobra do ultimo loop encerrado (sem gastar nada).
+  async leftover() {
+    const s = this.state;
+    const loop = [...s.loops].reverse().find((l) => l.status !== 'live');
+    if (!loop || !this.adapter.tokenBalance) return null;
+    const held = await this.adapter.tokenBalance(loop.token).catch(() => 0n);
+    if (!held || held === 0n) return null;
+    return { loop: loop.n, token: loop.token, tokens: fmtTokens(held), graduated: loop.status === 'graduated' };
+  }
+
   skipRest() { this.state.restUntil = null; this.state.retryAfter = null; this.save(this.state); }
   pause() { this.state.paused = true; this.note('paused', 'paused by admin'); this.save(this.state); }
   resume() { this.state.paused = false; this.note('resumed', 'resumed by admin'); this.save(this.state); }
@@ -592,6 +672,7 @@ export class Engine {
         deathIdleHours: this.rules.deathIdleHours, deathDropPct: this.rules.deathDropPct, maxLifeHours: this.rules.maxLifeHours,
         stillbornHours: this.rules.stillbornHours, rebirthDelayMin: this.rules.rebirthDelayMin, gasReserveEth: this.rules.gasReserveEth,
         creatorTaxPct: TOKEN.creatorTaxBps / 100, manualLaunch: !!this.rules.manualLaunch,
+        maxLaunchEth: this.rules.maxLaunchEth || '0',
       },
       ethUsd,
       balanceEth: balanceWei !== null ? eth(balanceWei) : null,

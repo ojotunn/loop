@@ -59,6 +59,7 @@ export const FACTORY_ABI = [
   }]),
   view('getLaunchedToken', [addr('token')], [LAUNCHED_TOKEN]),
   view('feeEscrow', [], [addr('')]),
+  view('memeHook', [], [addr('')]),
   {
     type: 'function', name: 'transferCreatorFeeRecipient', stateMutability: 'nonpayable',
     inputs: [addr('token'), addr('newRecipient')], outputs: [],
@@ -155,6 +156,43 @@ export const ESCROW_ABI = [
   view('balanceOf', [addr('recipient')], [u256('')]),
   { type: 'function', name: 'claim', stateMutability: 'nonpayable', inputs: [], outputs: [u256('amount')] },
 ];
+
+// Uniswap v4 pela via do Universal Router: execute(commands, inputs, deadline).
+// commands 0x10 = V4_SWAP; actions 0x06 = SWAP_EXACT_IN_SINGLE, 0x0c = SETTLE_ALL,
+// 0x0f = TAKE_ALL. Formato copiado de uma venda real do LOOP #2.
+export const UNIVERSAL_ROUTER_ABI = [
+  {
+    type: 'function', name: 'execute', stateMutability: 'payable',
+    inputs: [{ name: 'commands', type: 'bytes' }, { name: 'inputs', type: 'bytes[]' }, { name: 'deadline', type: 'uint256' }],
+    outputs: [],
+  },
+];
+
+export const PERMIT2_ABI = [
+  {
+    type: 'function', name: 'approve', stateMutability: 'nonpayable',
+    inputs: [addr('token'), addr('spender'), { name: 'amount', type: 'uint160' }, { name: 'expiration', type: 'uint48' }],
+    outputs: [],
+  },
+  {
+    type: 'function', name: 'allowance', stateMutability: 'view',
+    inputs: [addr('user'), addr('token'), addr('spender')],
+    outputs: [{ name: 'amount', type: 'uint160' }, { name: 'expiration', type: 'uint48' }, { name: 'nonce', type: 'uint48' }],
+  },
+];
+
+export const POOL_KEY = {
+  name: 'poolKey', type: 'tuple',
+  components: [addr('currency0'), addr('currency1'), { name: 'fee', type: 'uint24' }, { name: 'tickSpacing', type: 'int24' }, addr('hooks')],
+};
+
+export const EXACT_IN_SINGLE = {
+  type: 'tuple',
+  components: [POOL_KEY, bool('zeroForOne'), { name: 'amountIn', type: 'uint128' }, { name: 'amountOutMinimum', type: 'uint128' }, { name: 'hookData', type: 'bytes' }],
+};
+
+export const V4_ACTIONS = { SWAP_EXACT_IN_SINGLE: 0x06, SETTLE_ALL: 0x0c, TAKE_ALL: 0x0f };
+export const V4_SWAP_COMMAND = '0x10';
 
 export const DEAD_ADDRESS = '0x000000000000000000000000000000000000dEaD';
 

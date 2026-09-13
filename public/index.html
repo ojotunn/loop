@@ -41,7 +41,7 @@
   </div>
   <div class="hero-text">
     <h1>A token that is born, <em>dies</em>, and is born again.</h1>
-    <p class="lead">Every loop launches <b>$<span class="sym">LOOP</span></b> on pons and buys itself with everything the last loop earned. When it dies, the agent sells its position back, collects the creator fees and starts over, bigger. The last loop buys the <em>whole curve</em> and burns it.</p>
+    <p class="lead">Every loop launches <b>$<span class="sym">LOOP</span></b> on pons and buys itself at birth. It lives on the trading fees of its own curve. When it dies, the agent sells its position back, collects those fees and starts over, heavier. The last loop buys the <em>whole curve</em> and burns it.</p>
   </div>
 </section>
 
@@ -113,7 +113,7 @@
   <div class="eyebrow">How it works</div>
   <h2>Five rules, no exceptions</h2>
   <ol class="rules">
-    <li><b>Birth.</b> The agent launches <span class="sym-text">$LOOP</span> on pons v2 (Robinhood Chain) and buys itself in the same transaction with the whole pot. Same name, same ticker, every time.</li>
+    <li><b>Birth.</b> The agent launches <span class="sym-text">$LOOP</span> on pons v2 (Robinhood Chain) and <span id="how-birth">buys itself in the same transaction with the whole pot</span>. Same name, same ticker, every time.</li>
     <li><b>Life.</b> People trade. The creator tax (<span id="how-tax">10%</span>) accrues to the agent's own wallet. It watches buys, peak and graduation.</li>
     <li><b>Death.</b> <span id="how-death">A loop dies when the buying stops and only bots are left holding, or when it graduates.</span> If it graduates, the position stays in the pool and only the fees move on.</li>
     <li><b>Rebirth.</b> The agent sells its position back to the curve, sweeps and claims the fees, rests <span id="how-rest">15</span> minutes, and launches the next loop with all of it.</li>
@@ -150,6 +150,7 @@
       <button class="btn" id="btn-pause" type="button">Pause</button>
       <button class="btn" id="btn-resume" type="button">Resume</button>
       <button class="btn" id="btn-tick" type="button">Run a cycle now</button>
+      <button class="btn danger" id="btn-sell-leftover" type="button" hidden>Sell leftover position on the pool</button>
       <button class="btn burn" id="btn-authorize" type="button" hidden>Authorize the final burn</button>
     </div>
     <p class="muted" id="admin-msg"></p>

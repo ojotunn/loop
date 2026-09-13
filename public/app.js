@@ -104,7 +104,10 @@
         const head = !last ? '' : last.status === 'graduated'
           ? `Loop #${last.n} graduated: the curve closed and it trades on Uniswap now. Those tokens stay in the pool, and the fees keep coming. `
           : `Loop #${last.n} is over. `;
-        return `${head}The pot holds ${fmtEth(s.potEth)} and every bit of it goes into the next loop.`;
+        const cap = Number(s.rules.maxLaunchEth || 0), pot = Number(s.potEth || 0);
+        return head + (cap > 0 && pot > cap
+          ? `The pot holds ${fmtEth(s.potEth)}. The next loop is seeded with ${fmtEth(String(cap))} so the curve has room to run, and the rest waits for the last loop.`
+          : `The pot holds ${fmtEth(s.potEth)} and every bit of it goes into the next loop.`);
       }
       case 'awaiting_authorization': return `The pot covers the whole curve. The last loop is being prepared: one launch, one buy of the entire curve, then the burn.`;
       case 'final_done': return `The last loop bought the entire curve at birth and burned every token. There is no loop after this one.`;
@@ -203,6 +206,9 @@
     // regras
     $('how-tax').textContent = s.rules.creatorTaxPct + '%';
     $('how-death').textContent = deathText(s.rules).replace(/^It dies/, 'A loop dies');
+    $('how-birth').textContent = Number(s.rules.maxLaunchEth || 0) > 0
+      ? `buys itself in the same transaction with a seed of ${fmtEth(String(s.rules.maxLaunchEth))}, leaving the curve room to run`
+      : 'buys itself in the same transaction with the whole pot';
     $('how-rest').textContent = s.rules.rebirthDelayMin;
     $('agent-addr').textContent = s.agent;
     $('agent-explorer').href = `${s.links.explorer}/address/${s.agent}`;
@@ -212,6 +218,11 @@
     $('btn-pause').hidden = s.paused; $('btn-resume').hidden = !s.paused;
     $('btn-kill').disabled = !s.live;
     $('btn-launch').disabled = !!s.live || s.phase === 'final_done' || s.phase === 'awaiting_authorization';
+    const lastDone = s.loops[0];
+    let leftover = 0n;
+    try { leftover = lastDone && lastDone.status !== 'live' && lastDone.tokensAfterWei ? BigInt(lastDone.tokensAfterWei) : 0n; } catch { leftover = 0n; }
+    $('btn-sell-leftover').hidden = leftover <= 0n;
+    if (leftover > 0n) $('btn-sell-leftover').textContent = `Sell what is left of loop #${lastDone.n} on the pool`;
     $('log').innerHTML = s.log.map((e) => `<li>${esc(e.at.replace('T', ' ').slice(0, 19))} ${esc(e.kind)}: ${esc(e.text)}</li>`).join('');
   }
 
@@ -257,6 +268,7 @@
   act('btn-resume', '/api/admin/resume');
   act('btn-tick', '/api/admin/tick');
   act('btn-authorize', '/api/admin/authorize', 'Authorize the FINAL loop: the agent will launch, buy the entire curve with the pot and burn every token. This cannot be undone. Continue?');
+  act('btn-sell-leftover', '/api/admin/sell-position', 'Sell the leftover position on the Uniswap pool? A position this size moves the price a lot, and the sale is public. It can take a minute.');
 
   load();
   setInterval(load, 15000);

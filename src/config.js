@@ -38,6 +38,15 @@ export const CONTRACTS = {
 
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
+// Depois que o token gradua a curva fecha e ele passa a viver num pool Uniswap
+// v4. Vender la exige o Universal Router (execute) puxando o token pelo Permit2.
+// Enderecos confirmados em transacoes reais do LOOP #2 em 13/09/2026.
+export const V4 = {
+  router: process.env.UNIVERSAL_ROUTER || '0x8876789976dEcBfCbBbe364623C63652db8C0904',
+  permit2: process.env.PERMIT2 || '0x000000000022D473030F116dDEE9F6B43aC78BA3',
+  poolManager: process.env.POOL_MANAGER || '0x8366a39CC670B4001A1121B8F6A443A643e40951',
+};
+
 const num = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? Number(process.env[k]) : d);
 const str = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? String(process.env[k]) : d);
 
@@ -75,6 +84,11 @@ export const RULES = {
   gasReserveEth: str('GAS_RESERVE_ETH', '0.003'),
   // Menor dev buy que vale um lancamento.
   minDevBuyEth: str('MIN_DEV_BUY_ETH', '0.001'),
+  // Teto da compra de nascimento. 0 = sem teto (o loop nasce com o pote todo).
+  // Com o pote grande, gastar tudo no nascimento gradua em minutos e a posicao
+  // fica presa no pool: o dinheiro do Loop vem da taxa sobre o volume da curva,
+  // nao da graduacao (medido nos loops 1 e 2 em 13/09/2026).
+  maxLaunchEth: str('LAUNCH_MAX_ETH', '0.15'),
   // Folga acima do custo da curva inteira no lancamento final (o router devolve a sobra).
   finalMarginPct: num('FINAL_MARGIN_PCT', 2),
   // Estimativa do custo da curva inteira para a pagina, ate o pote chegar perto e medir.
