@@ -2,7 +2,7 @@
 // fictico por state override). Nada assina, nada gasta. Precisa de rede.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeFunctionData, decodeFunctionResult } from 'viem';
+import { encodeFunctionData, decodeFunctionResult, keccak256, encodeAbiParameters, pad, toHex } from 'viem';
 import * as chain from '../src/chain.js';
 import { ERC20_ABI } from '../src/abi.js';
 
@@ -80,6 +80,25 @@ test('buy events can be read from the curve', async () => {
   const buys = await chain.curveBuysBetween(CDTEST_CURVE, from, latest);
   console.log(`  ${buys.length} buys on CDTEST in the last 60k blocks`);
   assert.ok(Array.isArray(buys));
+});
+
+// Depois de graduar, a curva fecha e a unica saida e o pool Uniswap v4. Esta
+// prova monta a venda de verdade e a cota contra a mainnet, sem assinar nada:
+// o saldo do vendedor e as duas aprovacoes entram por state override.
+test('a graduated token can still be sold through the Universal Router', async () => {
+  const GRADUATED = '0xf01439e2A3f5F032Db9b19C1e7FBcd985D841BD0';   // LOOP #2
+  const key = await chain.poolKeyFor(GRADUATED);
+  assert.equal(key.currency0, '0x0000000000000000000000000000000000000000');
+  assert.equal(key.currency1, chain.getAddress(GRADUATED));
+  assert.match(key.hooks, /^0x[0-9a-fA-F]{40}$/);
+  const seller = chain.getAddress('0x00000000000000000000000000000000000a6e12');
+  const amount = 10n ** 24n;                                          // 1 M tokens
+  const slot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [seller, 0n]));
+  const holds = [{ address: GRADUATED, stateDiff: [{ slot, value: pad(toHex(amount), { size: 32 }) }] }];
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 900);
+  const q = await chain.quotePoolSell({ token: GRADUATED, from: seller, amountIn: amount, deadline, extraOverrides: holds });
+  console.log(`  1M tokens of a graduated $LOOP -> ${chain.formatEther(q.out)} ETH in the pool`);
+  assert.ok(q.out > 0n, 'the pool should pay something for a million tokens');
 });
 
 test('the agent wallet exposes only launch, sell, sweep, claim and burn', () => {

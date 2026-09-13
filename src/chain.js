@@ -283,9 +283,17 @@ async function poolSellOverrides({ token, owner, amount }) {
   return overrides;
 }
 
-export async function quotePoolSell({ token, from, amountIn, deadline }) {
+export async function quotePoolSell({ token, from, amountIn, deadline, extraOverrides = [] }) {
   const poolKey = await poolKeyFor(token);
-  const stateOverride = await poolSellOverrides({ token, owner: from, amount: amountIn }).catch(() => undefined);
+  const base = await poolSellOverrides({ token, owner: from, amount: amountIn }).catch(() => []);
+  // Junta overrides do mesmo contrato: a RPC so aceita uma entrada por endereco.
+  const merged = new Map();
+  for (const o of [...base, ...extraOverrides]) {
+    const k = String(o.address).toLowerCase();
+    const prev = merged.get(k);
+    merged.set(k, prev ? { address: o.address, stateDiff: [...prev.stateDiff, ...o.stateDiff] } : o);
+  }
+  const stateOverride = merged.size ? [...merged.values()] : undefined;
   const works = async (minOut) => {
     const tx = buildPoolSellTx({ poolKey, amountIn, minOut, deadline });
     try { await client.call({ account: from, to: tx.to, data: tx.data, value: 0n, stateOverride }); return true; } catch { return false; }
