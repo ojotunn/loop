@@ -200,7 +200,7 @@ test('the end: pot covers the curve -> asks, waits, launches and burns only afte
   // botao interno: vender e lancar a proxima
   await eng.kill();
   assert.equal(state.loops[0].status, 'dead');
-  assert.equal(state.loops[0].deathReason, 'manual: sell and launch the next');
+  assert.equal(state.loops[0].deathReason, 'ended by the creator');
   assert.equal(state.restUntil, null);
   // pote agora cobre a curva inteira
   chain.bal = E('5');
@@ -244,7 +244,7 @@ test('with the automatic rules off (0), a loop only dies by the button', async (
   assert.equal(loop.status, 'live');
   await eng.kill();
   assert.equal(loop.status, 'dead');
-  assert.match(loop.deathReason, /manual/);
+  assert.equal(loop.deathReason, 'ended by the creator');
 });
 
 test('manual mode: nothing launches until the creator presses launch; end loop waits again', async () => {
