@@ -24,9 +24,12 @@ const BACKFILL_FEES = { '0xbfbd1fe7bb87e4e727563e7f7bdf0cdce5353d87': '2.1138786
 // O loop 2 graduou e a posicao foi vendida no pool na mao, em 13/09/2026, antes
 // de existir o botao. Numeros lidos da chain: 1,614968… ETH entraram e a
 // carteira ficou com zero token do loop 2.
+// O motor antigo, que ainda nao sabia distinguir venda de taxa, contou esse ETH
+// como taxa arrecadada; feesEth volta ao valor que era antes da venda.
 const BACKFILL_SALE = {
   '0xf01439e2a3f5f032db9b19c1e7fbcd985d841bd0': {
     soldEth: '1.614968272218709253',
+    feesEth: '0.584352084386132709',
     balanceAfterEth: '2.201988308446399962',
     tokensAfterWei: '0',
   },
@@ -59,10 +62,12 @@ export class Engine {
     }
     for (const l of s.loops || []) {
       const sale = BACKFILL_SALE[String(l.token).toLowerCase()];
-      if (!sale || l.saleBackfilled) continue;
+      if (!sale || l.saleBackfillV === 2) continue;
+      // Ajuste por diferenca: roda quantas vezes for, sempre chega no mesmo lugar.
       s.stats.soldTotalEth = eth(parseEther(s.stats.soldTotalEth || '0') - parseEther(l.soldEth || '0') + parseEther(sale.soldEth));
+      s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth || '0') - parseEther(l.feesEth || '0') + parseEther(sale.feesEth));
       Object.assign(l, sale);
-      l.saleBackfilled = true;
+      l.saleBackfillV = 2;
       changed = true;
     }
     // Loop encerrado antes de existir o acerto de contas: zera e deixa o
