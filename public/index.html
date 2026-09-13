@@ -146,7 +146,10 @@
   <div id="admin-panel" hidden>
     <div class="admin-grid">
       <button class="btn danger" id="btn-kill" type="button">End loop: sell & collect fees</button>
-      <button class="btn primary" id="btn-launch" type="button">Launch next loop</button>
+      <div class="launch-box">
+        <input id="launch-eth" type="text" inputmode="decimal" placeholder="whole pot" autocomplete="off" aria-label="ETH to spend at birth">
+        <button class="btn primary" id="btn-launch" type="button">Launch next loop</button>
+      </div>
       <button class="btn" id="btn-pause" type="button">Pause</button>
       <button class="btn" id="btn-resume" type="button">Resume</button>
       <button class="btn" id="btn-tick" type="button">Run a cycle now</button>

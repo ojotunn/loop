@@ -219,6 +219,8 @@
     $('btn-pause').hidden = s.paused; $('btn-resume').hidden = !s.paused;
     $('btn-kill').disabled = !s.live;
     $('btn-launch').disabled = !!s.live || s.phase === 'final_done' || s.phase === 'awaiting_authorization';
+    const seed = Number(s.rules.maxLaunchEth || 0);
+    $('launch-eth').placeholder = seed > 0 ? `seed ${fmtEth(String(seed))}` : `whole pot (${fmtEth(s.potEth)})`;
     const lastDone = s.loops[0];
     let leftover = 0n;
     try { leftover = lastDone && lastDone.status !== 'live' && lastDone.tokensAfterWei ? BigInt(lastDone.tokensAfterWei) : 0n; } catch { leftover = 0n; }
@@ -243,8 +245,8 @@
   const token = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
   const showAdmin = () => { $('admin').hidden = false; $('admin').scrollIntoView({ behavior: 'smooth' }); };
   const unlocked = (yes) => { $('admin-login').hidden = yes; $('admin-panel').hidden = !yes; $('admin-logout').hidden = !yes; };
-  async function api(path, method = 'POST') {
-    const r = await fetch(path, { method, headers: { 'x-admin-token': token(), 'content-type': 'application/json' } });
+  async function api(path, method = 'POST', body) {
+    const r = await fetch(path, { method, headers: { 'x-admin-token': token(), 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
     return j;
@@ -264,7 +266,18 @@
     try { const j = await api(path); $('admin-msg').textContent = 'Done: ' + JSON.stringify(j.result); setTimeout(load, 2500); } catch (e) { $('admin-msg').textContent = 'Error: ' + e.message; }
   });
   act('btn-kill', '/api/admin/kill', 'End this loop now? The agent sells its whole position back to the curve and collects the fees. The next loop only starts when you press "Launch next loop".');
-  act('btn-launch', '/api/admin/launch-now', 'Launch the next loop now, buying with the whole pot at birth?');
+  $('btn-launch').addEventListener('click', async () => {
+    const eth = $('launch-eth').value.trim();
+    const pot = state ? fmtEth(state.potEth) : 'the pot';
+    if (!confirm(`Launch the next loop now, spending ${eth ? eth + ' ETH' : pot} at birth?`)) return;
+    $('admin-msg').textContent = 'Working…';
+    try {
+      const j = await api('/api/admin/launch-now', 'POST', { eth });
+      $('admin-msg').textContent = 'Done: ' + JSON.stringify(j.result);
+      $('launch-eth').value = '';
+      setTimeout(load, 2500);
+    } catch (e) { $('admin-msg').textContent = 'Error: ' + e.message; }
+  });
   act('btn-pause', '/api/admin/pause');
   act('btn-resume', '/api/admin/resume');
   act('btn-tick', '/api/admin/tick');

@@ -405,10 +405,15 @@ export class Engine {
     } else if (!s.curveCost) {
       s.curveCost = { eth: String(this.rules.finalCostEstimateEth || '4.75'), tokens: fmtTokens(terms.curveSellable), at: iso(this.now()), measured: false };
     }
-    // Com teto, o loop nasce com uma semente e o resto do pote fica guardado
-    // para o fim; sem teto, nasce com tudo.
+    // Quanto vai na compra de nascimento: o valor que ele escolheu, senao o teto
+    // (semente), senao o pote inteiro. Nunca mais que o pote.
     const cap = parseEther(String(this.rules.maxLaunchEth || '0'));
-    await this.launch(cap > 0n && pot > cap ? cap : pot, terms, { final: false });
+    let devBuy = cap > 0n && pot > cap ? cap : pot;
+    if (s.launchAmountEth) {
+      const want = parseEther(s.launchAmountEth);
+      devBuy = want < pot ? want : pot;
+    }
+    await this.launch(devBuy, terms, { final: false });
   }
 
   noteOnce(kind, text, everyMs = 3600_000) {
@@ -471,6 +476,7 @@ export class Engine {
     s.retryAfter = null;
     s.restUntil = null;
     s.launchRequested = false;
+    s.launchAmountEth = null;
     s.phase = final ? 'final_launching' : 'live';
     this.save(s);
     if (!final) {
@@ -605,17 +611,24 @@ export class Engine {
   }
 
   // "Launch next loop": autoriza UM lancamento (o proximo ciclo executa).
-  requestLaunch() {
+  requestLaunch({ eth: amount } = {}) {
     const s = this.state;
     if (this.liveLoop()) throw new Error('a loop is still live; end it first');
     if (s.phase === 'final_done') throw new Error('the loop is over: the final burn already happened');
     if (s.phase === 'awaiting_authorization') throw new Error('the pot covers the whole curve: use "Authorize the final burn" instead');
+    // Valor escolhido na mao. Vazio = o de sempre (pote inteiro, ou a semente).
+    if (amount !== undefined && amount !== null && String(amount).trim() !== '') {
+      const clean = String(amount).trim().replace(/\s*eth$/i, '');
+      if (!/^\d+(\.\d{1,18})?$/.test(clean)) throw new Error('the amount must be a number like 0.5');
+      if (parseEther(clean) < this.minDevBuyWei()) throw new Error(`the smallest launch is ${this.rules.minDevBuyEth} ETH`);
+      s.launchAmountEth = clean;
+    } else s.launchAmountEth = null;
     s.launchRequested = true;
     s.restUntil = null;
     s.retryAfter = null;
-    this.note('launch_requested', 'next launch authorized by the creator');
+    this.note('launch_requested', `next launch authorized by the creator${s.launchAmountEth ? ` with ${s.launchAmountEth} ETH` : ''}`);
     this.save(s);
-    return { launchRequested: true };
+    return { launchRequested: true, eth: s.launchAmountEth || 'whole pot' };
   }
 
   // Vende no pool da Uniswap o que sobrou de um loop que graduou. A curva desse

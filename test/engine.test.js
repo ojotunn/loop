@@ -418,3 +418,25 @@ test('a failed simulation backs off instead of spamming', async () => {
   await eng.tick();
   assert.equal(state.loops.length, 1);
 });
+
+test('the creator can name the amount spent at birth', async () => {
+  const chain = new FakeChain({ balance: '2.2' });
+  const state = emptyState();
+  const eng = new Engine({ adapter: chain, state, save: () => {}, rules: { ...rules, manualLaunch: true }, publish: null, log: { log() {} } });
+  await eng.tick();
+  assert.equal(state.phase, 'ready');
+  eng.requestLaunch({ eth: '0.4' });
+  await eng.tick();
+  assert.equal(state.loops[0].devBuyEth, '0.4');
+  assert.equal(state.launchAmountEth, null, 'o valor vale para um lancamento so');
+  // um pedido sem valor volta a gastar o pote inteiro
+  await eng.kill();
+  eng.requestLaunch();
+  await eng.tick();
+  assert.equal(state.loops.length, 2);
+  assert.ok(Number(state.loops[1].devBuyEth) > 1, 'sem valor escolhido, vai o pote');
+  // texto que nao e numero e recusado antes de qualquer transacao
+  const fresh = new Engine({ adapter: new FakeChain({ balance: '2.2' }), state: emptyState(), save: () => {}, rules: { ...rules, manualLaunch: true }, publish: null, log: { log() {} } });
+  assert.throws(() => fresh.requestLaunch({ eth: 'muito' }), /number/);
+  assert.throws(() => fresh.requestLaunch({ eth: '0.0000001' }), /smallest launch/);
+});

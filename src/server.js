@@ -129,7 +129,7 @@ const act = (fn) => async (req, res) => {
 };
 app.get('/api/admin/check', admin, (req, res) => res.json({ ok: true }));
 app.post('/api/admin/kill', admin, act(async () => { const l = await engine.kill(); setTimeout(() => engine.tick(), 1500); return { ended: l.n, soldEth: l.soldEth, feesEth: l.feesEth }; }));
-app.post('/api/admin/launch-now', admin, act(async () => { const r = engine.requestLaunch(); setTimeout(() => engine.tick(), 500); return r; }));
+app.post('/api/admin/launch-now', admin, act(async (req) => { const r = engine.requestLaunch({ eth: req.body?.eth }); setTimeout(() => engine.tick(), 500); return r; }));
 app.post('/api/admin/authorize', admin, act(async () => { const f = engine.authorizeFinal('admin panel'); setTimeout(() => engine.tick(), 500); return f; }));
 app.post('/api/admin/sell-position', admin, act(async () => { const r = await engine.sellLeftover(); setTimeout(() => engine.tick(), 1500); return r; }));
 app.post('/api/admin/pause', admin, act(async () => { engine.pause(); return { paused: true }; }));
