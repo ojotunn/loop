@@ -142,6 +142,7 @@
       $('s-peak-at').textContent = l.peakAt ? ago(l.peakAt) : '';
       setNum('s-buys', l.buys, (v) => String(Math.round(v)));
       $('s-biggest').textContent = Number(l.biggestBuyEth) > 0 ? 'biggest ' + fmtEth(l.biggestBuyEth) : 'from others';
+      $('s-fees-k').textContent = l.status === 'live' ? 'Fees waiting' : 'Fees earned';
       setNum('s-fees', Number(l.status === 'live' ? l.pendingFeesEth : l.feesEth), (v) => fmtEth(v));
       $('s-tax').textContent = s.rules.creatorTaxPct + '%';
       $('s-age').textContent = dur(l.bornAt, l.diedAt);
@@ -192,7 +193,7 @@
         <div class="t-ca num"><a href="${esc(s.links.ponsUrl.replace('{token}', x.token))}" target="_blank" rel="noopener">${esc(x.token)}</a></div>
       </li>`;
     }).join('');
-    $('hist-summary').textContent = `${s.stats.loopsBorn} born · ${s.stats.loopsDead} dead · ${fmtEth(s.stats.feesTotalEth)} in fees · ${s.stats.buysTotal} buys`;
+    $('hist-summary').textContent = `${s.stats.loopsBorn} ${s.stats.loopsBorn === 1 ? 'loop' : 'loops'} · ${fmtEth(s.stats.feesTotalEth)} earned in fees · ${s.stats.buysTotal} buys`;
 
     // feed
     const ps = $('posts');
