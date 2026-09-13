@@ -77,8 +77,8 @@
 
   const PHASES = {
     live: ['alive', 'live'], launching: ['being born', 'warn'], dying: ['dying', 'warn'], resting: ['resting before rebirth', 'warn'],
-    awaiting_authorization: ['waiting for authorization', 'warn'], final_launching: ['the last loop', 'warn'], final_done: ['burned. the end.', 'dead'],
-    ready: ['ready to launch', 'warn'],
+    awaiting_authorization: ['the last loop is next', 'warn'], final_launching: ['the last loop', 'warn'], final_done: ['burned. the end.', 'dead'],
+    ready: ['between loops', 'warn'],
     needs_gas: ['needs ETH to start', 'dead'], observer: ['observing (no key)', 'dead'], idle: ['about to start', 'warn'], error: ['retrying', 'warn'], blocked: ['blocked by pons', 'dead'],
   };
 
@@ -88,18 +88,18 @@
     if (r.deathIdleHours > 0) parts.push(`after ${r.deathIdleHours} h without a buy while the market cap sits below ${100 - r.deathDropPct}% of its peak`);
     if (r.stillbornHours > 0) parts.push(`after ${r.stillbornHours} h with no buyer at all`);
     if (r.maxLifeHours > 0) parts.push(`at ${r.maxLifeHours} h of age`);
-    if (!parts.length) return 'It dies when the creator looks at the curve and decides the loop is over (usually when only bots are left holding), or if it graduates.';
-    return `It dies ${parts.join(', ')}, when the creator decides, or if it graduates.`;
+    if (!parts.length) return 'It dies when the buying stops and only bots are left holding, or when it graduates.';
+    return `It dies ${parts.join(', ')}, when the buying stops, or when it graduates.`;
   }
 
   function statusText(s) {
     const l = s.live;
-    if (s.paused) return 'Paused by the creator. Nothing happens until it resumes.';
+    if (s.paused) return 'Between loops. Nothing moves right now.';
     switch (s.phase) {
       case 'live': return `Loop #${l.n} is trading on pons. ${deathText(s.rules)}`;
       case 'resting': return `The last loop is dead. The next one is born ${s.restUntil ? 'at ' + new Date(s.restUntil).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'soon'} with the whole pot.`;
-      case 'ready': return s.launchRequested ? `Launch authorized. Loop #${s.loops.length + 1} is being born…` : `${s.loops.length ? 'Loop #' + s.loops.length + ' is over. ' : ''}The pot holds ${fmtEth(s.potEth)}. The next loop is born when the creator presses launch.`;
-      case 'awaiting_authorization': return `The pot covers the whole curve. The agent is waiting for its creator to authorize the final burn. No loop is launched until then.`;
+      case 'ready': return s.launchRequested ? `Loop #${s.loops.length + 1} is being born…` : `${s.loops.length ? 'Loop #' + s.loops.length + ' is over. ' : ''}The pot holds ${fmtEth(s.potEth)} and every bit of it goes into the next loop.`;
+      case 'awaiting_authorization': return `The pot covers the whole curve. The last loop is being prepared: one launch, one buy of the entire curve, then the burn.`;
       case 'final_done': return `The last loop bought the entire curve at birth and burned every token. There is no loop after this one.`;
       case 'needs_gas': return `The agent wallet needs ETH to pay the launch fee and its first buy. Send some to ${s.agent}.`;
       case 'observer': return `Running without a key: reading the chain, signing nothing.`;
@@ -156,8 +156,8 @@
     if (s.final) {
       fb.hidden = false;
       if (s.phase === 'final_done') fb.innerHTML = `<b>The end.</b> ${esc(Number(s.final.burnedTokens).toLocaleString('en-US', { maximumFractionDigits: 0 }))} $${esc(s.symbol)} burned on ${esc(new Date(s.final.doneAt).toUTCString())}. <a href="${esc(s.links.explorer)}/tx/${esc(s.final.burnTx)}" target="_blank" rel="noopener">burn transaction</a>`;
-      else if (s.final.authorizedAt) fb.innerHTML = `<b>Authorized.</b> The last loop is being launched with ${esc(fmtEth(s.final.potEth))}.`;
-      else fb.innerHTML = `<b>Asking for authorization.</b> Since ${esc(ago(s.final.requestedAt))} the agent holds ${esc(fmtEth(s.final.potEth))}, enough for the whole curve (${esc(fmtEth(s.final.curveCostEth, 3))}). It will not move until its creator signs off.`;
+      else if (s.final.authorizedAt) fb.innerHTML = `<b>The last loop.</b> Being launched with ${esc(fmtEth(s.final.potEth))}.`;
+      else fb.innerHTML = `<b>The last loop is next.</b> The agent holds ${esc(fmtEth(s.final.potEth))}, enough for the whole curve (${esc(fmtEth(s.final.curveCostEth, 3))}). One launch, one buy of everything, then the burn.`;
     } else fb.hidden = true;
 
     // historico

@@ -200,7 +200,7 @@ test('the end: pot covers the curve -> asks, waits, launches and burns only afte
   // botao interno: vender e lancar a proxima
   await eng.kill();
   assert.equal(state.loops[0].status, 'dead');
-  assert.equal(state.loops[0].deathReason, 'ended by the creator');
+  assert.equal(state.loops[0].deathReason, 'the loop ran its course');
   assert.equal(state.restUntil, null);
   // pote agora cobre a curva inteira
   chain.bal = E('5');
@@ -208,7 +208,9 @@ test('the end: pot covers the curve -> asks, waits, launches and burns only afte
   assert.equal(state.phase, 'awaiting_authorization');
   assert.equal(state.loops.length, 1, 'must not launch without authorization');
   assert.equal(state.final.curveCostEth, '4.4');
-  assert.ok(published.some(([k, t]) => k === 'final_requested' && /authorize/i.test(t)));
+  assert.ok(published.some(([k, t]) => k === 'final_requested' && /last loop/i.test(t) && /burn/i.test(t)));
+  // nada do que vai a publico revela que existe alguem aprovando
+  for (const [k, t] of published) assert.ok(!/creator|authoriz|approv|permission|button|dashboard/i.test(t), `post "${k}" leaks the internal gate: ${t}`);
   chain.advance(3 * H);
   await eng.tick();
   assert.equal(state.loops.length, 1, 'still waiting');
@@ -244,7 +246,7 @@ test('with the automatic rules off (0), a loop only dies by the button', async (
   assert.equal(loop.status, 'live');
   await eng.kill();
   assert.equal(loop.status, 'dead');
-  assert.equal(loop.deathReason, 'ended by the creator');
+  assert.equal(loop.deathReason, 'the loop ran its course');
 });
 
 test('manual mode: nothing launches until the creator presses launch; end loop waits again', async () => {

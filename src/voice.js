@@ -25,15 +25,15 @@ export function template(event) {
     case 'graduated':
       return `${S()} #${e.n} graduated. My tokens stay where they are; the fees keep coming. The next loop starts from the fees alone.`;
     case 'final_requested':
-      return `I have ${e.potEth} ETH. That buys the whole curve of a new ${S()} (${e.curveCostEth} ETH). This is the last loop: one buy, then I burn every token I get. Waiting for my creator to authorize it.`;
+      return `I have ${e.potEth} ETH. That buys the whole curve of a new ${S()} (${e.curveCostEth} ETH). This is the last loop: one buy, then I burn every token I get.`;
     case 'final_launched':
       return `The last ${S()} is born and I bought the whole curve: ${fmtTokens(e.tokens)} tokens. Now I burn them.`;
     case 'burned':
       return `Done. ${fmtTokens(e.tokens)} ${S()} burned forever. There is no next loop.`;
     case 'ready':
       return e.n === 1
-        ? `I am ready. ${e.potEth} ETH in the pot for ${S()} #1. Waiting for my creator to press launch.`
-        : `Loop #${e.n - 1} is over. I hold ${e.potEth} ETH for ${S()} #${e.n}, all of it. Waiting for my creator to press launch.`;
+        ? `I am ready. ${e.potEth} ETH in the pot, and all of it becomes the opening buy of ${S()} #1.`
+        : `Loop #${e.n - 1} is over. I hold ${e.potEth} ETH for ${S()} #${e.n}, all of it.`;
     case 'needs_gas':
       return `I have ${e.balanceEth} ETH and need at least ${e.neededEth} ETH to launch. Anyone can send it to ${e.agent}.`;
     case 'stillborn':
@@ -43,7 +43,7 @@ export function template(event) {
   }
 }
 
-const RULES_TEXT = 'Never promise price, never give financial advice, never tell people to buy. Plain text, at most 240 characters, no hashtag spam (max one), no emojis. Say what happened with the real numbers you were given.';
+const RULES_TEXT = 'Never promise price, never give financial advice, never tell people to buy. Plain text, at most 240 characters, no hashtag spam (max one), no emojis. Say what happened with the real numbers you were given. Never mention a creator, an owner, an operator, approvals, permissions, buttons or a dashboard: you act on your own.';
 
 export async function say(event, context = {}) {
   const fallback = template(event);
@@ -52,7 +52,7 @@ export async function say(event, context = {}) {
     const res = await client.messages.create({
       model: VOICE.model,
       max_tokens: 200,
-      system: `You are ${TOKEN.name} (${S()}), a token on pons (Robinhood Chain) that is born, dies and is born again from its own creator fees, speaking in first person. Each loop launches the same name and ticker; at birth you buy yourself with everything you have; when the loop dies you sell your position back, collect the fees and start again with more. The last loop buys the whole curve and burns it, only with the creator's authorization. Write ONE post for X. ${RULES_TEXT} Personality: ${VOICE.vibe}.`,
+      system: `You are ${TOKEN.name} (${S()}), a token on pons (Robinhood Chain) that is born, dies and is born again from its own creator fees, speaking in first person. Each loop launches the same name and ticker; at birth you buy yourself with everything you have; when the loop dies you sell your position back, collect the fees and start again with more. The last loop buys the whole curve and burns it. Write ONE post for X. ${RULES_TEXT} Personality: ${VOICE.vibe}.`,
       messages: [{ role: 'user', content: `Event: ${JSON.stringify(event)}\nContext: ${JSON.stringify(context)}\nWrite the post.` }],
       output_config: { effort: 'low' },
     });

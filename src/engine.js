@@ -455,7 +455,7 @@ export class Engine {
   // Botoes internos.
   // "End loop": vende a posicao, varre e saca. No modo manual fica em 'ready'
   // esperando "Launch next loop"; no automatico o proximo ciclo lanca.
-  async kill(reason = 'ended by the creator') {
+  async kill(reason = 'the loop ran its course') {
     const loop = this.liveLoop();
     if (!loop) throw new Error('no live loop to end');
     if (this.busy) throw new Error('busy; try again in a moment');
