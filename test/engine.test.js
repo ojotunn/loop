@@ -290,6 +290,29 @@ test('fees that land straight in the wallet are counted, not just the escrow', a
   assert.equal(state.stats.feesTotalEth, '1.42');
 });
 
+test('graduation: nothing is sold, the loop is marked migrated, and late fees still reach the pot', async () => {
+  const { chain, state, eng } = make({ balance: '0.06' });
+  await eng.tick();
+  const loop = state.loops[0];
+  chain.rec(loop.curve).state.graduated = true;
+  chain.escrow = E('0.2');
+  chain.advance(60_000);
+  await eng.tick();
+  assert.equal(loop.status, 'graduated');
+  assert.equal(loop.graduationPct, 100, 'a graduated loop is 100%, not 0%');
+  assert.equal(loop.soldEth, '0');
+  assert.ok(!chain.calls.some((c) => c[0] === 'sell'), 'graduation never sells');
+  assert.equal(loop.feesEth, '0.2');
+  // a pons continua pagando depois que a curva fecha: direto na carteira e no escrow
+  chain.bal += E('0.5');
+  chain.escrow = E('0.1');
+  chain.advance(60_000);
+  await eng.tick();
+  assert.equal(loop.feesEth, '0.8');
+  assert.equal(state.stats.feesTotalEth, '0.8');
+  assert.equal(state.loops.length, 1, 'still no automatic relaunch');
+});
+
 test('authorize outside the gate is refused', () => {
   const { eng } = make();
   assert.throws(() => eng.authorizeFinal(), /nothing to authorize/);

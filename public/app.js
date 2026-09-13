@@ -98,7 +98,14 @@
     switch (s.phase) {
       case 'live': return `Loop #${l.n} is trading on pons. ${deathText(s.rules)}`;
       case 'resting': return `The last loop is dead. The next one is born ${s.restUntil ? 'at ' + new Date(s.restUntil).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'soon'} with the whole pot.`;
-      case 'ready': return s.launchRequested ? `Loop #${s.loops.length + 1} is being born…` : `${s.loops.length ? 'Loop #' + s.loops.length + ' is over. ' : ''}The pot holds ${fmtEth(s.potEth)} and every bit of it goes into the next loop.`;
+      case 'ready': {
+        if (s.launchRequested) return `Loop #${s.loops.length + 1} is being born…`;
+        const last = s.loops[0];
+        const head = !last ? '' : last.status === 'graduated'
+          ? `Loop #${last.n} graduated: the curve closed and it trades on Uniswap now. Those tokens stay in the pool, and the fees keep coming. `
+          : `Loop #${last.n} is over. `;
+        return `${head}The pot holds ${fmtEth(s.potEth)} and every bit of it goes into the next loop.`;
+      }
       case 'awaiting_authorization': return `The pot covers the whole curve. The last loop is being prepared: one launch, one buy of the entire curve, then the burn.`;
       case 'final_done': return `The last loop bought the entire curve at birth and burned every token. There is no loop after this one.`;
       case 'needs_gas': return `The agent wallet needs ETH to pay the launch fee and its first buy. Send some to ${s.agent}.`;
@@ -125,8 +132,12 @@
     $('death-rule').textContent = l && l.status === 'live' ? `Born ${ago(l.bornAt)} · last buy ${l.lastBuyAt ? ago(l.lastBuyAt) : 'never'} · dev buy ${fmtEth(l.devBuyEth)} → ${Number(l.tokensBought).toLocaleString('en-US', { maximumFractionDigits: 0 })} tokens` : '';
 
     if (l) {
-      if (usd) setNum('s-mcap', l.mcapEth * usd, fmtUsd); else setNum('s-mcap', l.mcapEth, (v) => fmtEth(v, 3));
-      $('s-mcap-eth').textContent = usd ? fmtEth(l.mcapEth, 3) : '';
+      const migrated = l.status === 'graduated';
+      if (migrated) { $('s-mcap').textContent = '—'; shown.delete('s-mcap'); $('s-mcap-eth').textContent = 'trades on Uniswap now'; }
+      else {
+        if (usd) setNum('s-mcap', l.mcapEth * usd, fmtUsd); else setNum('s-mcap', l.mcapEth, (v) => fmtEth(v, 3));
+        $('s-mcap-eth').textContent = usd ? fmtEth(l.mcapEth, 3) : '';
+      }
       if (usd) setNum('s-peak', l.peakMcapEth * usd, fmtUsd); else setNum('s-peak', l.peakMcapEth, (v) => fmtEth(v, 3));
       $('s-peak-at').textContent = l.peakAt ? ago(l.peakAt) : '';
       setNum('s-buys', l.buys, (v) => String(Math.round(v)));
@@ -135,8 +146,11 @@
       $('s-tax').textContent = s.rules.creatorTaxPct + '%';
       $('s-age').textContent = dur(l.bornAt, l.diedAt);
       $('s-born').textContent = l.status === 'live' ? 'and counting' : (l.deathReason || '');
-      setNum('s-grad', l.graduationPct || 0, (v) => v.toFixed(1) + '%');
-      $('s-raised').textContent = 'raised ' + fmtEth(l.raisedEth, 3);
+      if (migrated) { $('s-grad').textContent = 'migrated'; shown.delete('s-grad'); $('s-raised').textContent = 'the curve is closed'; }
+      else {
+        setNum('s-grad', l.graduationPct || 0, (v) => v.toFixed(1) + '%');
+        $('s-raised').textContent = 'raised ' + fmtEth(l.raisedEth, 3);
+      }
       $('ca-row').hidden = false;
       $('ca').textContent = l.token;
       $('ca-pons').href = s.links.ponsUrl.replace('{token}', l.token);

@@ -21,6 +21,8 @@ const short = (e) => String(e?.shortMessage || e?.message || e).split('\n')[0].s
 // carteira. Valor reconstruido pela aritmetica do saldo on-chain em 13/09/2026:
 // saldo final - venda - claim - saldo no nascimento. Loops novos medem sozinhos.
 const BACKFILL_FEES = { '0xbfbd1fe7bb87e4e727563e7f7bdf0cdce5353d87': '2.113878669949326248' };
+// Menor saque que vale uma transacao (o gas de um claim e ~0,000003 ETH).
+const MIN_CLAIM = parseEther('0.0005');
 
 export class Engine {
   constructor({ adapter, state, save, rules = RULES, publish = null, log = console }) {
@@ -43,6 +45,15 @@ export class Engine {
       s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth || '0') - parseEther(l.feesEth || '0') + parseEther(right));
       l.feesEth = right;
       l.feesBackfilled = true;
+      changed = true;
+    }
+    // Loop encerrado antes de existir o acerto de contas: zera e deixa o
+    // settleLast recontar tudo pelo saldo, do nascimento ate agora.
+    const last = s.loops[s.loops.length - 1];
+    if (last && last.status !== 'live' && !last.balanceAfterEth && last.balanceAtBirthEth) {
+      s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth || '0') - parseEther(last.feesEth || '0'));
+      last.feesEth = '0';
+      last.balanceAfterEth = last.balanceAtBirthEth;
       changed = true;
     }
     if (changed) this.save(s);
@@ -128,10 +139,14 @@ export class Engine {
       }
       s.lastScanBlock = latest.toString();
     }
-    loop.mcapEth = cs.mcapEth;
-    loop.priceEth = cs.priceEth;
-    loop.raisedEth = cs.raisedEth;
-    loop.graduationPct = Number(cs.realQuote * 10_000n / (await a.terms()).graduationThreshold) / 100;
+    // Depois de graduar a curva fica zerada (a liquidez foi para o pool), entao
+    // nao sobrescreve os numeros da vida do loop com zeros.
+    if (!cs.graduated) {
+      loop.mcapEth = cs.mcapEth;
+      loop.priceEth = cs.priceEth;
+      loop.raisedEth = cs.raisedEth;
+      loop.graduationPct = Number(cs.realQuote * 10_000n / (await a.terms()).graduationThreshold) / 100;
+    }
     if (cs.mcapEth > (loop.peakMcapEth || 0)) { loop.peakMcapEth = cs.mcapEth; loop.peakAt = iso(this.now()); }
     const escrowBal = await a.escrowBalance();
     loop.pendingFeesEth = eth(cs.unswept + escrowBal);
@@ -199,6 +214,7 @@ export class Engine {
     loop.deathReason = reason;
     loop.soldEth = eth(soldWei);
     loop.feesEth = eth(fees + directFees);
+    loop.balanceAfterEth = eth(await a.balance().catch(() => 0n));
     loop.txs = [...(loop.txs || []), ...txs];
     s.stats.loopsDead += 1;
     s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth) + fees + directFees);
@@ -222,6 +238,36 @@ export class Engine {
     const now = await this.adapter.balance().catch(() => 0n);
     const born = parseEther(loop.balanceAtBirthEth);
     return now > born ? now - born : 0n;
+  }
+
+  // Entre loops: a pons continua varrendo as taxas do pool do token que graduou
+  // para o escrow. Recolhe sozinho, senao esse dinheiro fica de fora do pote.
+  async claimEscrow() {
+    try {
+      const owed = await this.adapter.escrowBalance();
+      if (owed < MIN_CLAIM) return 0n;
+      const r = await this.adapter.claim();
+      if (!r?.ok) return 0n;
+      this.note('claim', `claimed ${eth(owed)} ETH from the escrow between loops`);
+      return owed;
+    } catch (e) { this.note('error', `claim between loops: ${short(e)}`); return 0n; }
+  }
+
+  // As fees do loop que acabou continuam pingando depois da morte dele (a pons
+  // paga parte no fim). Enquanto nenhum loop novo nasce, o que entra na carteira
+  // pertence ao ultimo loop: acerta a conta dele a cada ciclo.
+  async settleLast() {
+    const s = this.state;
+    const last = s.loops[s.loops.length - 1];
+    if (!last || last.status === 'live' || !last.balanceAfterEth) return;
+    const now = await this.adapter.balance().catch(() => null);
+    if (now === null) return;
+    const before = parseEther(last.balanceAfterEth);
+    if (now <= before) return;
+    const delta = now - before;
+    last.feesEth = eth(parseEther(last.feesEth || '0') + delta);
+    last.balanceAfterEth = eth(now);
+    s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth || '0') + delta);
   }
 
   async collect(loop, cs, txs) {
@@ -254,13 +300,16 @@ export class Engine {
     loop.diedAt = iso(this.now());
     loop.deathReason = 'graduated';
     loop.soldEth = '0';
+    loop.graduationPct = 100;
+    loop.migrated = true;
     loop.feesEth = eth(fees + directFees);
+    loop.balanceAfterEth = eth(await this.adapter.balance().catch(() => 0n));
     loop.txs = [...(loop.txs || []), ...txs];
     s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth) + fees + directFees);
     s.restUntil = iso(this.now() + this.rules.rebirthDelayMin * 60_000);
     s.phase = 'resting';
     this.save(s);
-    await this.post({ kind: 'graduated', n: loop.n, feesEth: loop.feesEth }, this.context(loop, cs));
+    await this.post({ kind: 'graduated', n: loop.n, feesEth: loop.feesEth, sold: false, positionLockedInPool: loop.tokensBought }, this.context(loop, cs));
   }
 
   // Pote: o que sobra do saldo depois da reserva de gas e da taxa da pons.
@@ -280,9 +329,13 @@ export class Engine {
       if (s.final?.authorizedAt) return this.finalLaunch();
       return;
     }
+    if (!a.canSign) { s.phase = 'observer'; return; }
+    // Dinheiro primeiro: recolhe o escrow e acerta a conta do ultimo loop mesmo
+    // durante o descanso, senao o pote mostra menos do que a carteira tem.
+    await this.claimEscrow();
+    await this.settleLast();
     if (!this.rules.manualLaunch && s.restUntil && this.now() < Date.parse(s.restUntil)) { s.phase = 'resting'; return; }
     if (s.retryAfter && this.now() < Date.parse(s.retryAfter)) return;
-    if (!a.canSign) { s.phase = 'observer'; return; }
 
     const terms = await a.terms();
     if (!terms.launchEnabled && !(await a.canLaunch())) { s.phase = 'blocked'; this.noteOnce('blocked', 'pons is not accepting launches from this wallet right now'); return; }
