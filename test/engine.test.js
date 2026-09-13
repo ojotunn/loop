@@ -277,6 +277,19 @@ test('manual mode: nothing launches until the creator presses launch; end loop w
   assert.equal(state.loops.length, 2);
 });
 
+test('fees that land straight in the wallet are counted, not just the escrow', async () => {
+  const { chain, state, eng } = make({ balance: '0.06' });
+  await eng.tick();
+  const loop = state.loops[0];
+  assert.equal(loop.balanceAtBirthEth, '0.003');     // 0.06 - 0.0565 de compra - 0.0005 de taxa
+  chain.bal += E('1.4');                             // creator tax caindo direto na carteira
+  chain.escrow = E('0.02');                          // e um resto parado no escrow
+  chain.advance(H);
+  await eng.kill();
+  assert.equal(loop.feesEth, '1.42');                // 1.4 diretas + 0.02 do escrow
+  assert.equal(state.stats.feesTotalEth, '1.42');
+});
+
 test('authorize outside the gate is refused', () => {
   const { eng } = make();
   assert.throws(() => eng.authorizeFinal(), /nothing to authorize/);

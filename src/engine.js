@@ -16,6 +16,12 @@ const eth = (wei) => formatEther(wei);
 const fmtTokens = (wei) => formatUnits(wei, 18);
 const short = (e) => String(e?.shortMessage || e?.message || e).split('\n')[0].slice(0, 160);
 
+// Conserto de uma vez so: o loop 1 nasceu antes de existir o marco de saldo, e
+// por isso so contou as fees do escrow (0,0032) em vez das que cairam direto na
+// carteira. Valor reconstruido pela aritmetica do saldo on-chain em 13/09/2026:
+// saldo final - venda - claim - saldo no nascimento. Loops novos medem sozinhos.
+const BACKFILL_FEES = { '0xbfbd1fe7bb87e4e727563e7f7bdf0cdce5353d87': '2.113878669949326248' };
+
 export class Engine {
   constructor({ adapter, state, save, rules = RULES, publish = null, log = console }) {
     this.adapter = adapter;
@@ -25,6 +31,21 @@ export class Engine {
     this.publish = publish;           // async (event, text) => { tweetId, telegramId } | null
     this.console = log;
     this.busy = false;
+    this.backfill();
+  }
+
+  backfill() {
+    const s = this.state;
+    let changed = false;
+    for (const l of s.loops || []) {
+      const right = BACKFILL_FEES[String(l.token).toLowerCase()];
+      if (!right || l.feesBackfilled || l.balanceAtBirthEth) continue;
+      s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth || '0') - parseEther(l.feesEth || '0') + parseEther(right));
+      l.feesEth = right;
+      l.feesBackfilled = true;
+      changed = true;
+    }
+    if (changed) this.save(s);
   }
 
   now() { return this.adapter.now ? this.adapter.now() : Date.now(); }
@@ -156,6 +177,7 @@ export class Engine {
     if (!cs) cs = await a.curveState(loop.curve, loop.token);
     const txs = [];
     let soldWei = 0n;
+    const directFees = await this.directFees(loop);
 
     // 1) venda da posicao (so na curva; depois da graduacao nao ha rota)
     const held = await a.tokenBalance(loop.token);
@@ -176,10 +198,10 @@ export class Engine {
     loop.diedAt = iso(this.now());
     loop.deathReason = reason;
     loop.soldEth = eth(soldWei);
-    loop.feesEth = eth(fees);
+    loop.feesEth = eth(fees + directFees);
     loop.txs = [...(loop.txs || []), ...txs];
     s.stats.loopsDead += 1;
-    s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth) + fees);
+    s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth) + fees + directFees);
     s.stats.soldTotalEth = eth(parseEther(s.stats.soldTotalEth) + soldWei);
     s.restUntil = iso(this.now() + this.rules.rebirthDelayMin * 60_000);
     s.phase = 'resting';
@@ -189,6 +211,17 @@ export class Engine {
       kind: reason === 'stillborn' ? 'stillborn' : 'died', n: loop.n, reason, hours: this.rules.stillbornHours,
       peakMcapEth: Number(loop.peakMcapEth || 0).toFixed(4), buys: loop.buys, feesEth: loop.feesEth, soldEth: loop.soldEth, potEth: eth(pot > 0n ? pot : 0n),
     }, this.context(loop, cs));
+  }
+
+  // Fees que caíram direto na carteira durante a vida do loop. Mede pelo saldo,
+  // porque nao ha evento por trade. Entre o nascimento e a morte a carteira so
+  // recebe fee e so gasta gas, entao a diferenca e o que ela ganhou (levemente
+  // subestimada pelo gas). Loops antigos, sem marco, contam zero aqui.
+  async directFees(loop) {
+    if (!loop.balanceAtBirthEth) return 0n;
+    const now = await this.adapter.balance().catch(() => 0n);
+    const born = parseEther(loop.balanceAtBirthEth);
+    return now > born ? now - born : 0n;
   }
 
   async collect(loop, cs, txs) {
@@ -215,14 +248,15 @@ export class Engine {
   async graduate(loop, cs) {
     const s = this.state;
     const txs = [];
+    const directFees = await this.directFees(loop);
     const fees = await this.collect(loop, cs, txs);
     loop.status = 'graduated';
     loop.diedAt = iso(this.now());
     loop.deathReason = 'graduated';
     loop.soldEth = '0';
-    loop.feesEth = eth(fees);
+    loop.feesEth = eth(fees + directFees);
     loop.txs = [...(loop.txs || []), ...txs];
-    s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth) + fees);
+    s.stats.feesTotalEth = eth(parseEther(s.stats.feesTotalEth) + fees + directFees);
     s.restUntil = iso(this.now() + this.rules.rebirthDelayMin * 60_000);
     s.phase = 'resting';
     this.save(s);
@@ -330,6 +364,10 @@ export class Engine {
       return null;
     }
     const loop = this.newLoop({ n, token: r.token || predicted.token, curve: r.curve || predicted.curve, hash: r.hash, block: r.block, devBuyWei, tokensOut: r.tokensOut, final });
+    // Marco zero do saldo: a pons paga a maior parte da creator tax DIRETO na
+    // carteira a cada trade, nao so no escrow. Entao as fees do loop sao
+    // (saldo na morte - saldo no nascimento) + o que o escrow pagou no fim.
+    loop.balanceAtBirthEth = eth(await a.balance().catch(() => 0n));
     s.pendingLaunch = null;
     s.retryAfter = null;
     s.restUntil = null;
