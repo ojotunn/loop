@@ -81,7 +81,7 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '8kb' }));
 app.use((req, res, next) => {
-  if (CANONICAL_HOST && req.method === 'GET' && !req.path.startsWith('/api/') && String(req.hostname || '').toLowerCase() !== CANONICAL_HOST) {
+  if (CANONICAL_HOST && (req.method === 'GET' || req.method === 'HEAD') && !req.path.startsWith('/api/') && String(req.hostname || '').toLowerCase() !== CANONICAL_HOST) {
     return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
   }
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -128,8 +128,8 @@ const act = (fn) => async (req, res) => {
   try { res.json({ ok: true, result: await fn(req) }); } catch (e) { res.status(400).json({ error: String(e.message || e) }); }
 };
 app.get('/api/admin/check', admin, (req, res) => res.json({ ok: true }));
-app.post('/api/admin/kill', admin, act(async () => { const l = await engine.kill(); setTimeout(() => engine.tick(), 1500); return { loop: l.n }; }));
-app.post('/api/admin/launch-now', admin, act(async () => { engine.skipRest(); setTimeout(() => engine.tick(), 500); return { phase: state.phase }; }));
+app.post('/api/admin/kill', admin, act(async () => { const l = await engine.kill(); setTimeout(() => engine.tick(), 1500); return { ended: l.n, soldEth: l.soldEth, feesEth: l.feesEth }; }));
+app.post('/api/admin/launch-now', admin, act(async () => { const r = engine.requestLaunch(); setTimeout(() => engine.tick(), 500); return r; }));
 app.post('/api/admin/authorize', admin, act(async () => { const f = engine.authorizeFinal('admin panel'); setTimeout(() => engine.tick(), 500); return f; }));
 app.post('/api/admin/pause', admin, act(async () => { engine.pause(); return { paused: true }; }));
 app.post('/api/admin/resume', admin, act(async () => { engine.resume(); setTimeout(() => engine.tick(), 500); return { paused: false }; }));

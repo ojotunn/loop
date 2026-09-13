@@ -247,6 +247,34 @@ test('with the automatic rules off (0), a loop only dies by the button', async (
   assert.match(loop.deathReason, /manual/);
 });
 
+test('manual mode: nothing launches until the creator presses launch; end loop waits again', async () => {
+  const chain = new FakeChain({ balance: '0.06' });
+  const state = emptyState();
+  const published = [];
+  const eng = new Engine({ adapter: chain, state, save: () => {}, rules: { ...rules, manualLaunch: true }, publish: async (ev, t) => { published.push(ev.kind); return null; }, log: { log() {} } });
+  await eng.tick();
+  assert.equal(state.loops.length, 0);
+  assert.equal(state.phase, 'ready');
+  assert.ok(published.includes('ready'));
+  chain.advance(3 * H);
+  await eng.tick();
+  assert.equal(state.loops.length, 0, 'still waiting');
+  eng.requestLaunch();
+  await eng.tick();
+  assert.equal(state.loops.length, 1);
+  assert.equal(state.phase, 'live');
+  assert.equal(state.launchRequested, false);
+  await assert.rejects(async () => eng.requestLaunch(), /still live/);
+  await eng.kill();
+  assert.equal(state.loops[0].status, 'dead');
+  await eng.tick();
+  assert.equal(state.loops.length, 1, 'no automatic relaunch in manual mode');
+  assert.equal(state.phase, 'ready');
+  eng.requestLaunch();
+  await eng.tick();
+  assert.equal(state.loops.length, 2);
+});
+
 test('authorize outside the gate is refused', () => {
   const { eng } = make();
   assert.throws(() => eng.authorizeFinal(), /nothing to authorize/);

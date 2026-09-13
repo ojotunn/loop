@@ -246,7 +246,7 @@ export class Engine {
       if (s.final?.authorizedAt) return this.finalLaunch();
       return;
     }
-    if (s.restUntil && this.now() < Date.parse(s.restUntil)) { s.phase = 'resting'; return; }
+    if (!this.rules.manualLaunch && s.restUntil && this.now() < Date.parse(s.restUntil)) { s.phase = 'resting'; return; }
     if (s.retryAfter && this.now() < Date.parse(s.retryAfter)) return;
     if (!a.canSign) { s.phase = 'observer'; return; }
 
@@ -258,6 +258,12 @@ export class Engine {
       s.phase = 'needs_gas';
       const needed = this.reserveWei() + terms.launchFee + this.minDevBuyWei();
       await this.postOnce('needs_gas', { kind: 'needs_gas', balanceEth: eth(bal), neededEth: eth(needed), agent: this.agent }, 3600_000);
+      return;
+    }
+    // Modo manual: pote pronto, espera o criador apertar "Launch next loop".
+    if (this.rules.manualLaunch && !s.launchRequested) {
+      s.phase = 'ready';
+      await this.postOnce('ready', { kind: 'ready', n: s.loops.length + 1, potEth: eth(pot) }, 6 * 3600_000);
       return;
     }
     // A curva inteira custa mais que o limiar de graduacao; so vale medir (24
@@ -327,6 +333,7 @@ export class Engine {
     s.pendingLaunch = null;
     s.retryAfter = null;
     s.restUntil = null;
+    s.launchRequested = false;
     s.phase = final ? 'final_launching' : 'live';
     this.save(s);
     if (!final) {
@@ -446,16 +453,32 @@ export class Engine {
 
   // -------------------------------------------------------------------------
   // Botoes internos.
-  async kill(reason = 'manual: sell and launch the next') {
+  // "End loop": vende a posicao, varre e saca. No modo manual fica em 'ready'
+  // esperando "Launch next loop"; no automatico o proximo ciclo lanca.
+  async kill(reason = 'ended by the creator') {
     const loop = this.liveLoop();
-    if (!loop) throw new Error('no live loop to kill');
+    if (!loop) throw new Error('no live loop to end');
     if (this.busy) throw new Error('busy; try again in a moment');
     this.busy = true;
     try {
       await this.die(loop, reason);
-      this.state.restUntil = null;   // sem descanso: o proximo ciclo lanca
+      this.state.restUntil = null;
     } finally { this.save(this.state); this.busy = false; }
     return loop;
+  }
+
+  // "Launch next loop": autoriza UM lancamento (o proximo ciclo executa).
+  requestLaunch() {
+    const s = this.state;
+    if (this.liveLoop()) throw new Error('a loop is still live; end it first');
+    if (s.phase === 'final_done') throw new Error('the loop is over: the final burn already happened');
+    if (s.phase === 'awaiting_authorization') throw new Error('the pot covers the whole curve: use "Authorize the final burn" instead');
+    s.launchRequested = true;
+    s.restUntil = null;
+    s.retryAfter = null;
+    this.note('launch_requested', 'next launch authorized by the creator');
+    this.save(s);
+    return { launchRequested: true };
   }
 
   skipRest() { this.state.restUntil = null; this.state.retryAfter = null; this.save(this.state); }
@@ -473,10 +496,11 @@ export class Engine {
     return {
       name: TOKEN.name, symbol: TOKEN.symbol, agent: this.agent, canSign: !!this.adapter.canSign,
       phase: s.phase, paused: s.paused, restUntil: s.restUntil, lastTickAt: s.lastTickAt, lastError: s.lastError,
+      launchRequested: !!s.launchRequested,
       rules: {
         deathIdleHours: this.rules.deathIdleHours, deathDropPct: this.rules.deathDropPct, maxLifeHours: this.rules.maxLifeHours,
         stillbornHours: this.rules.stillbornHours, rebirthDelayMin: this.rules.rebirthDelayMin, gasReserveEth: this.rules.gasReserveEth,
-        creatorTaxPct: TOKEN.creatorTaxBps / 100,
+        creatorTaxPct: TOKEN.creatorTaxBps / 100, manualLaunch: !!this.rules.manualLaunch,
       },
       ethUsd,
       balanceEth: balanceWei !== null ? eth(balanceWei) : null,

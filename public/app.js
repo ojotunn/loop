@@ -78,6 +78,7 @@
   const PHASES = {
     live: ['alive', 'live'], launching: ['being born', 'warn'], dying: ['dying', 'warn'], resting: ['resting before rebirth', 'warn'],
     awaiting_authorization: ['waiting for authorization', 'warn'], final_launching: ['the last loop', 'warn'], final_done: ['burned. the end.', 'dead'],
+    ready: ['ready to launch', 'warn'],
     needs_gas: ['needs ETH to start', 'dead'], observer: ['observing (no key)', 'dead'], idle: ['about to start', 'warn'], error: ['retrying', 'warn'], blocked: ['blocked by pons', 'dead'],
   };
 
@@ -97,6 +98,7 @@
     switch (s.phase) {
       case 'live': return `Loop #${l.n} is trading on pons. ${deathText(s.rules)}`;
       case 'resting': return `The last loop is dead. The next one is born ${s.restUntil ? 'at ' + new Date(s.restUntil).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'soon'} with the whole pot.`;
+      case 'ready': return s.launchRequested ? `Launch authorized. Loop #${s.loops.length + 1} is being born…` : `${s.loops.length ? 'Loop #' + s.loops.length + ' is over. ' : ''}The pot holds ${fmtEth(s.potEth)}. The next loop is born when the creator presses launch.`;
       case 'awaiting_authorization': return `The pot covers the whole curve. The agent is waiting for its creator to authorize the final burn. No loop is launched until then.`;
       case 'final_done': return `The last loop bought the entire curve at birth and burned every token. There is no loop after this one.`;
       case 'needs_gas': return `The agent wallet needs ETH to pay the launch fee and its first buy. Send some to ${s.agent}.`;
@@ -194,6 +196,7 @@
     $('btn-authorize').hidden = s.phase !== 'awaiting_authorization';
     $('btn-pause').hidden = s.paused; $('btn-resume').hidden = !s.paused;
     $('btn-kill').disabled = !s.live;
+    $('btn-launch').disabled = !!s.live || s.phase === 'final_done' || s.phase === 'awaiting_authorization';
     $('log').innerHTML = s.log.map((e) => `<li>${esc(e.at.replace('T', ' ').slice(0, 19))} ${esc(e.kind)}: ${esc(e.text)}</li>`).join('');
   }
 
@@ -233,8 +236,8 @@
     $('admin-msg').textContent = 'Working…';
     try { const j = await api(path); $('admin-msg').textContent = 'Done: ' + JSON.stringify(j.result); setTimeout(load, 2500); } catch (e) { $('admin-msg').textContent = 'Error: ' + e.message; }
   });
-  act('btn-kill', '/api/admin/kill', 'Sell the whole position back to the curve, collect the fees and launch the next loop right away?');
-  act('btn-launch', '/api/admin/launch-now');
+  act('btn-kill', '/api/admin/kill', 'End this loop now? The agent sells its whole position back to the curve and collects the fees. The next loop only starts when you press "Launch next loop".');
+  act('btn-launch', '/api/admin/launch-now', 'Launch the next loop now, buying with the whole pot at birth?');
   act('btn-pause', '/api/admin/pause');
   act('btn-resume', '/api/admin/resume');
   act('btn-tick', '/api/admin/tick');

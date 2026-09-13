@@ -14,7 +14,8 @@ A token that is born, dies, and is born again from its own creator fees, on pons
 | `DEATH_DROP_PCT` | 80 | …while mcap sits below (100-80)=20% of the peak → dead |
 | `MAX_LIFE_HOURS` | 0 (off) | dies at this age no matter what |
 | `STILLBORN_HOURS` | 0 (off) | nobody ever bought → dead |
-| `REBIRTH_DELAY_MIN` | 15 | pause between death and the next launch |
+| `REBIRTH_DELAY_MIN` | 15 | pause between death and the next launch (auto mode only) |
+| `LAUNCH_MODE` | manual | manual: the agent never launches by itself, the creator presses "Launch next loop"; auto: launches after the rest |
 | `GAS_RESERVE_ETH` | 0.003 | never spent on a launch |
 | `CREATOR_TAX_BPS` | 200 | 2% (pons allows up to 10%) |
 

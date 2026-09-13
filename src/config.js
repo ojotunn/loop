@@ -66,8 +66,11 @@ export const RULES = {
   maxLifeHours: num('MAX_LIFE_HOURS', 0),
   // Natimorto: ninguem alem do agente comprou em X horas.
   stillbornHours: num('STILLBORN_HOURS', 0),
-  // Pausa entre a morte e o proximo nascimento (para o mundo ver).
+  // Pausa entre a morte e o proximo nascimento (so no modo automatico).
   rebirthDelayMin: num('REBIRTH_DELAY_MIN', 15),
+  // manual (padrao, pedido do Michel 12/09): o agente NUNCA lanca sozinho; junta o
+  // pote e espera o botao "Launch next loop". auto: lanca sozinho apos o descanso.
+  manualLaunch: str('LAUNCH_MODE', 'manual') !== 'auto',
   // ETH que nunca entra no pote (gas das proximas transacoes).
   gasReserveEth: str('GAS_RESERVE_ETH', '0.003'),
   // Menor dev buy que vale um lancamento.

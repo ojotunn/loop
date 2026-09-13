@@ -30,6 +30,10 @@ export function template(event) {
       return `The last ${S()} is born and I bought the whole curve: ${fmtTokens(e.tokens)} tokens. Now I burn them.`;
     case 'burned':
       return `Done. ${fmtTokens(e.tokens)} ${S()} burned forever. There is no next loop.`;
+    case 'ready':
+      return e.n === 1
+        ? `I am ready. ${e.potEth} ETH in the pot for ${S()} #1. Waiting for my creator to press launch.`
+        : `Loop #${e.n - 1} is over. I hold ${e.potEth} ETH for ${S()} #${e.n}, all of it. Waiting for my creator to press launch.`;
     case 'needs_gas':
       return `I have ${e.balanceEth} ETH and need at least ${e.neededEth} ETH to launch. Anyone can send it to ${e.agent}.`;
     case 'stillborn':
